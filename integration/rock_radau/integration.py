@@ -270,39 +270,100 @@ def rk_embedded(tini, tend, yini, fcn, tol, dt_ini=1.e-2, options=None):
 
 #############################################################################
 class radau_result:
-    def __init__(self, y, t, nfev, njev, nstep, naccpt, nrejct, ndec, nsol):
+    def __init__(self, y, t):
         self.y = y
         self.t = t
-        self.nfev = nfev
-        self.njev = njev
-        self.nstep = nstep
-        self.naccpt = naccpt
-        self.nrejct = nrejct
-        self.ndec = ndec
-        self.nsol = nsol
+#        self.nfev = nfev
+#        self.njev = njev
+#        self.nstep = nstep
+#        self.naccpt = naccpt
+#        self.nrejct = nrejct
+#        self.ndec = ndec
+#        self.nsol = nsol
 
 #############################################################################
-def radau5(tini, tend, yini, fcn, njac, rtol, atol, iout=1):
-    """ njac = demi-largeur de bande de la matrice jacobienne ( (p-1)/2 si p-diagonale)"""
+def radau5(tini, tend, yini, fun, mass_matrix, mujac, mljac, rtol, atol, t_eval=None,
+    nmax_step = 100000000000, max_step=None,
+    max_ite_newton=None, bUseExtrapolatedGuess=None, bUsePredictiveController=None,
+    safetyFactor=None, jacobianRecomputeFactor=None, newton_tol=None, deadzone=None, step_evo_factor_bounds=None,
+    var_index=None):
+    """ njac = demi-largeur de bande de la matrice jacobienne ( (p-1)/2 si p-diagonale)
+    """
+
     import os
-    #sPath = "./mylib/lib_radau_rock.so"
     current_dir = os.path.dirname(os.path.realpath(__file__))
     subpath = "mylib/lib_radau_rock.so"
     sPath = os.path.join(current_dir, subpath)
     c_integration = ct.CDLL(sPath)
 
+    neq = yini.size # number of components
     tsol=[]
     ysol=[]
+    
+
+    def fcn(n, t, y, ydot, rpar, ipar):
+        y_np = np.ctypeslib.as_array(y, shape=(n[0],)) # transform input into a Numpy array
+        ydot_np = fun(t[0], y_np) # call Python time derivative function #TODO: optional arguments *args
+        for i in range(n[0]): # transform back from Numpy #TODO: faster way ?
+          ydot[i] = ydot_np[i]
+
+    if mass_matrix is None:
+      # no mass matrix supplied --> set to identity
+      mlmas = mumas = 0
+      imas = 0
+    else:
+      try:
+        from scipy.linalg import bandwith
+      except ImportError:
+        def bandwith(matrix):
+          lband=uband=0
+          for i in range(matrix.shape[0]):
+            for j in range(i):
+              if matrix[i,j]!=0:
+                lband = max(lband, i-j)
+            for j in range(i,matrix.shape[0]):
+              if matrix[i,j]!=0:
+                uband = max(uband, j-i)
+          return (lband, uband)
+
+      mlmas, mumas = bandwith( mass_matrix ) # determine bandwith
+      imas = 1
+
+    def mass_fcn(n, am, lmas, rpar, ipar):
+        assert n[0]==neq
+        if mlmas==neq and mumas==neq: # full matrix
+          for i in range(n[0]):
+            for j in range(max(0,i-mlmas), min(neq,i+mumas)):
+              am[i-j+mumas+1,j][j] = mass_matrix[i,j]
+
+          # for debug checks
+          mass_np = np.ctypeslib.as_array(y, shape=(lmas[0], n[0])) # transform input into a Numpy array
+          reconstructed_mass_matrix = np.zeros((neq,neq))
+          for i in range(n[0]):
+            for j in range(max(0,i-mlmas), min(neq,i+mumas)):
+              reconstructed_mass_matrix[i,j] = am[i-j+mumas+1,j][j]
+          assert np.allclose(reconstructed_mass_matrix, mass_matrix, rtol=1e-13, atol=1e-13), 'mass matrix is wrongly transcribed'
+
+        else:
+          for i in range(n[0]): # transform back from Numpy #TODO: faster way ?
+            for j in range(n[0]):
+              am[i][j] = mass_matrix[i,j]
+
+
 
     def solout(nr, told, t, y, cont, lrc, n, rpar, ipar, irtrn):
         tsol.append(t[0])
-        tmp = []
-        for i in range(n[0]):
-            tmp.append(y[i])
-        ysol.append(np.array(tmp))
+        y_np = np.ctypeslib.as_array(y, shape=(n[0],)) # transform input into a Numpy array
+      #  tmp = []
+       # for i in range(n[0]):
+        #    tmp.append(y[i])
+        ysol.append(y_np)
+        irtrn[0] = 1 # if <0, Radau5 will exit --> TODO: handle events with that ?
 
     fcn_type = ct.CFUNCTYPE(None, ct.POINTER(ct.c_int), ct.POINTER(ct.c_double), ct.POINTER(ct.c_double),
                             ct.POINTER(ct.c_double), ct.POINTER(ct.c_double), ct.POINTER(ct.c_int))
+    mas_fcn_type = ct.CFUNCTYPE(None, ct.POINTER(ct.c_int), ct.POINTER(ct.c_double), ct.POINTER(ct.c_int),
+                            ct.POINTER(ct.c_int), ct.POINTER(ct.c_int))
     solout_type = ct.CFUNCTYPE(None, ct.POINTER(ct.c_int), ct.POINTER(ct.c_double), ct.POINTER(ct.c_double),
                                ct.POINTER(ct.c_double), ct.POINTER(ct.c_double), ct.POINTER(ct.c_int),
                                ct.POINTER(ct.c_int), ct.POINTER(ct.c_double), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int))
@@ -315,31 +376,135 @@ def radau5(tini, tend, yini, fcn, njac, rtol, atol, iout=1):
                          ct.c_int, np.ctypeslib.ndpointer(dtype = np.int32)]
     c_radau5.restype = None
 
+    # create callabel interfaces to the Python functions (time derivatives, jacobian, solution export, mass matrix)
     callable_fcn = fcn_type(fcn)
+    callable_mass_fcn = mas_fcn_type(mass_fcn)
     callable_solout = solout_type(solout)
 
-    yini_array = np.array(yini)
-    neq = yini_array.size
     yn = np.zeros(neq)
     info= np.zeros(7, dtype=np.int32)
-    c_radau5(tini, tend, neq, yini_array, yn, callable_fcn, callable_solout, rtol, atol, njac, iout, info)
 
-    if iout == 1:
-        tsol = np.array(tsol)
-        ysol = np.array(np.transpose(np.array(ysol)), order='F')
+    itol=0 # tolerances are specified as scalars
+    assert np.isscalar(rtol) and np.isscalar(atol), "`rtol` and `atol` must be scalars"
+
+    jac = None # jacobian function
+    ijac = 0
+    mujac=neq
+    mljac=neq
+    bDenseJacobian = (mujac == neq) and (mljac == neq) # Jacobian is dense ?
+
+    
+
+    ### FILL IN PARAMETERS IWORK
+    # to keep the same indices as in the Fortran code, the first component here is useless
+    iwork = [0 for i in range(21)]
+    work  = [0. for i in range(21)]
+
+    if (bDenseJacobian) and (imas==0) and bTryToUseHessenberg:
+      # the Jacobian can be transformed to Hessenberg, speeding up computations for large systems with dense Jacobians
+      iwork[1] = 1
+    else: 
+      iwork[1] = 0
+
+    iwork[2] = nmax_step
+
+    if max_ite_newton is not None:
+      iwork[3] = max_ite_newton
+
+    if bUseExtrapolatedGuess is not None:
+      if not bUseExtrapolatedGuess:
+        iwork[4] = 1
+    
+    # TODO: Radau5 requires that the variables be sorted by differentiation index for DAEs
+    if imas==1:
+      if var_index is not None: # DAE system of index>1 (index 1 does not need extra treatments)
+        n_index0 = np.count_nonzero(var_index == 0)
+        n_index1 = np.count_nonzero(var_index == 1)
+        n_index2 = np.count_nonzero(var_index == 2)
+        n_index3 = np.count_nonzero(var_index == 3)
+        assert n_index0 + n_index1 + n_index2 + n_index3 == neq, "Are some variables of index higher than 3 ?"
+        
+        iwork[5] = n_index0 + n_index1 # number of index-0 and index-1 variables
+        iwork[6] = n_index2
+        iwork[7] = n_index3
+    
+    if bUsePredictiveController is not None:
+      if bUsePredictiveController:
+        iwork[8] = 1 # advanced time step controller of Gustafson
+      else:
+        iwork[8] = 2 # classical time step controller
+      
+    # for second-order systems #TODO: enable that !!!
+    iwork[9]  = 0
+    iwork[10] = 0
+
+    # work is set to 0 for default behaviour
+    #work[1] = 1e-16 # rounding unit
+    if safetyFactor is not None:
+      work[2] = safetyFactor
+    if jacobianRecomputeFactor is not None:
+      work[3] = jacobianRecomputeFactor
+    if newton_tol is not None:
+      work[3] = newton_tol
+    if deadzone is not None: # deadzone for time step 
+      work[5] = deadzone[0]
+      work[6] = deadzone[1]
+
+    if max_step is not None:
+      work[7] = max_step
+
+    if step_evo_factor_bounds is not None: # min and max relative time step variation
+      work[8] = step_evo_factor_bounds[0]
+      work[9] = step_evo_factor_bounds[1]
+
+
+    if t_eval is None:
+      iout = 1 # all time steps will be exported
     else:
+      if len(t_eval)==1 and t_eval[-1]==tend:
+        iout = 0
+      else:
+        raise NotImplemented('Non trivial values of `t_eval` are not yet supported')
+
+    #################################
+    ##  Call C-interface to Radau5 ##
+    #################################
+    c_radau5(tini, tend,
+             neq, yini, yn,
+             callable_fcn, callable_mass_fcn, callable_solout,
+             rtol, atol,
+             iwork[1:], work[:1],
+             iout, info)
+
+    ################
+    ##  Finalise  ##
+    ################
+    if iout == 1: # whole solution is exported
+        tsol = np.array(tsol)
+        ysol = np.array(np.array(ysol).T, order='F')
+    else: # only final point
         tsol = tend
         ysol = yn
 
-    nfev   = info[0]  # number of function evaluations
-    njev   = info[1]  # number of jacobian evaluations
-    nstep  = info[2]  # number of computed steps
-    naccpt = info[3]  # number of accepted steps
-    nrejct = info[4]  # number of rejected steps
-    ndec   = info[5]  # number of lu-decompositions
-    nsol   = info[6]  # number of forward-backward substitutions
-
-    return radau_result(ysol, tsol, nfev, njev, nstep, naccpt, nrejct, ndec, nsol)
+    out = radau_result(ysol, tsol)
+    out.nfev   = info[0]  # number of function evaluations
+    out.njev   = info[1]  # number of jacobian evaluations
+    out.nstep  = info[2]  # number of computed steps
+    out.naccpt = info[3]  # number of accepted steps
+    out.nrejct = info[4]  # number of rejected steps
+    out.ndec   = info[5]  # number of lu-decompositions
+    out.nsol   = info[6]  # number of forward-backward substitutions
+    
+    IDID = info[7] # exit code
+    out.success = IDID > 0
+    if IDID== 1:  out.msg='COMPUTATION SUCCESSFUL'
+    if IDID== 2:  out.msg='COMPUT. SUCCESSFUL (INTERRUPTED BY SOLOUT)'
+    if IDID==-1:  out.msg='INPUT IS NOT CONSISTENT'
+    if IDID==-2:  out.msg='LARGER NMAX IS NEEDED'
+    if IDID==-3:  out.msg='STEP SIZE BECOMES TOO SMALL'
+    if IDID==-4:  out.msg='MATRIX IS REPEATEDLY SINGULAR'
+     
+    return out
 
 #############################################################################
 class rock_result:

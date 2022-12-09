@@ -2,18 +2,22 @@
 
 #include "integration_radau.h"
 
-void radau5_integration(double tini, double tend, int n, double *yini, double *y, func_radau fcn,
-		        func_solout_radau solout, double rtol, double atol, int njac, int iout, int *info)
+void radau5_integration(double tini, double tend,
+                        int n, // size of the system
+                        double *yini, // pointer to the initial solution vector
+                        double *y, //
+                        func_radau fcn, // interface to the Python time derivative function
+                        func_solout_radau solout, // solution export function
+                        double rtol, double atol, // error tolerances (scalar only)
+                        int ijac; //specifier for the Jacobian evaluation
+                        int mujac, int mljac, // upper and lower bandwidths of jacobian 
+                        int imas, // specifier for the mass matrix
+                        int iout, int *info)
 {
   // both rtol and atol are scalars
-  int itol=0;
-
-  // jacobian is computed internally by finite differences
-  int ijac=0;
-  // lower bandwidth of jacobian 
-  int mljac = njac;
-  // upper bandwidth of jacobian 
-  int mujac = mljac; 
+  int itol=0; // tolerances are scalar
+  int ijac=0; // jacobian is computed internally by finite differences
+  //TODO: enable user-provided Jacobian function ?
 
   // mass matrix (assumed to be the identity matrix)
   int imas=0;
@@ -27,7 +31,8 @@ void radau5_integration(double tini, double tend, int n, double *yini, double *y
   int ljac=mljac+mujac+1;
   int le=2*mljac+mujac+1;
   int lmas=0;
-  int lwork = n*(ljac+lmas+3*le+12)+20;
+  int lwork = n*(ljac+lmas+3*le+12)+20; // minimum size
+  
   double work[lwork];
 
   // size of array lwork
@@ -64,7 +69,7 @@ void radau5_integration(double tini, double tend, int n, double *yini, double *y
          solout, &iout,
          work, &lwork, iwork, &liwork,
          &rpar, &ipar, &idid);
-
+         
   // save & print statistics
   info[0] = iwork[13];  
   info[1] = iwork[14];  
@@ -73,6 +78,7 @@ void radau5_integration(double tini, double tend, int n, double *yini, double *y
   info[4] = iwork[17];  
   info[5] = iwork[18];  
   info[6] = iwork[19];  
+  info[7] = idid;  
 }
 
 void jac_radau(int *n, double *x, double *y, double *dfy, int *ldfy, double *rpar, double *ipar)
