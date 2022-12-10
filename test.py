@@ -5,7 +5,7 @@ n = 100
 x = np.linspace(0,1,n)
 y0 = (np.exp((x-0.5)**2) - 1)/(np.exp(0.5**2) - 1)
 dx = x[1]-x[0]
-tf = 1.
+tf = 1.2
 
 def heat_modelfun(t,y):
     """ Simple finite-difference discretisation of the heat equation,
@@ -16,7 +16,8 @@ def heat_modelfun(t,y):
     dxdt[-1] =  (y[-2] - y[-1]) / dx**2
     return dxdt
     
-mass_matrix = np.eye(n)
+#mass_matrix = np.eye(n)
+mass_matrix = np.ones((n,n))
 
 def fcn_rock(n, t, y, ydot, *args):
     y_np = np.ctypeslib.as_array(y, shape=(n[0],))

@@ -1,43 +1,45 @@
 #include<stdio.h>
 
 #include "integration_radau.h"
-
+//void radau5_integration(double tini, double tend, int n, double *yini, double *y, func_radau fcn, func_mas_radau mas_fcn, func_solout_radau solout, double rtol, double atol, int mljac, int mujac, int imas, int mlmas, int mumas, int *iwork_in, double *work_in, int iout, int *info)
 void radau5_integration(double tini, double tend,
                         int n, // size of the system
                         double *yini, // pointer to the initial solution vector
                         double *y, //
                         func_radau fcn, // interface to the Python time derivative function
+                        func_mas_radau mas_fcn, // mass matrix evaluation function
                         func_solout_radau solout, // solution export function
                         double rtol, double atol, // error tolerances (scalar only)
-                        int ijac; //specifier for the Jacobian evaluation
-                        int mujac, int mljac, // upper and lower bandwidths of jacobian 
-                        int imas, // specifier for the mass matrix
-                        int iout, int *info)
+                        int mljac, int mujac, // Jacobian lower and upper bandwiths
+                        int imas, int mlmas, int mumas, // Mass matrix lower and upper bandwiths
+                        int *iwork_in, // integer parameters
+                        double *work_in, // decimal parameters
+                        int iout,  // solution export mode
+                        int *info) // statistics
 {
+  printf("1\n");
+  
+  printf("n=%i, rtol=%f, atol=%f\n", n, rtol, atol);
+  printf("mljac=%i, mujac=%i\n", mljac, mujac);
+  printf("imas=%i, mlmas=%i, mumas=%i\n", imas, mlmas, mumas);
+  
   // both rtol and atol are scalars
   int itol=0; // tolerances are scalar
   int ijac=0; // jacobian is computed internally by finite differences
   //TODO: enable user-provided Jacobian function ?
 
-  // mass matrix (assumed to be the identity matrix)
-  int imas=0;
-  int mlmas;
-  int mumas;
-
-  // output routine is used during integration
-  ////int iout=1;
-
   // size of array work 
   int ljac=mljac+mujac+1;
   int le=2*mljac+mujac+1;
-  int lmas=0;
-  int lwork = n*(ljac+lmas+3*le+12)+20; // minimum size
-  
-  double work[lwork];
-
-  // size of array lwork
+  int lmas=mlmas+mumas+1;
+  int lwork = n*(ljac+lmas+3*le+12)+20; // minimum size  
   int liwork = 3*n+20;
+  // work arrays
+  double work[lwork];
   int iwork[liwork];
+
+  printf("itol=%i, ijac=%i, ljac=%i, le=%i, lmas=%i\n", itol, ijac, ljac, le, lmas);
+  printf("lwork=%i, liwork=%i\n", lwork, liwork);
 
   // real and integer parameters
   double rpar;
@@ -51,15 +53,16 @@ void radau5_integration(double tini, double tend,
   double dt=0.;
 
   int i;
-
   // initial solution
   for (i=0; i<n; ++i) y[i] = yini[i];
 
   for(i=0; i<20; i++)
   {
-    iwork[i]=0;
-    work[i]=0.0;
+    printf("  iwork_in[%2i]  = %16i, \t work_in[%2i]  = %16f\n",i, iwork_in[i],i,work_in[i]);
+    iwork[i] = iwork_in[i];
+    work[i]  =  work_in[i];
   }
+  printf("Calling radau from C interface\n");
 
   // directly calling fortran
   radau5(&n, fcn, &t, y, &tend, &dt,

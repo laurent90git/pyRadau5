@@ -283,7 +283,7 @@ class radau_result:
 
 #############################################################################
 def radau5(tini, tend, yini, fun, mass_matrix, mujac, mljac, rtol, atol, t_eval=None,
-    nmax_step = 100000000000, max_step=None,
+    nmax_step = 10000, max_step=None,
     max_ite_newton=None, bUseExtrapolatedGuess=None, bUsePredictiveController=None,
     safetyFactor=None, jacobianRecomputeFactor=None, newton_tol=None, deadzone=None, step_evo_factor_bounds=None,
     var_index=None):
@@ -324,6 +324,9 @@ def radau5(tini, tend, yini, fun, mass_matrix, mujac, mljac, rtol, atol, t_eval=
             for j in range(i,matrix.shape[0]):
               if matrix[i,j]!=0:
                 uband = max(uband, j-i)
+          uband = min(uband+1, matrix.shape[0])
+          lband = min(lband+1, matrix.shape[0]) # TODO: check this problematic definition of the bandwith (it('s the only to have uband=lband=n for a dense matrix...
+          print(f'uband={uband}, lband={lband}')
           return (lband, uband)
 
       mlmas, mumas = bandwith( mass_matrix ) # determine bandwith
@@ -362,6 +365,9 @@ def radau5(tini, tend, yini, fun, mass_matrix, mujac, mljac, rtol, atol, t_eval=
 
     fcn_type = ct.CFUNCTYPE(None, ct.POINTER(ct.c_int), ct.POINTER(ct.c_double), ct.POINTER(ct.c_double),
                             ct.POINTER(ct.c_double), ct.POINTER(ct.c_double), ct.POINTER(ct.c_int))
+
+
+
     mas_fcn_type = ct.CFUNCTYPE(None, ct.POINTER(ct.c_int), ct.POINTER(ct.c_double), ct.POINTER(ct.c_int),
                             ct.POINTER(ct.c_int), ct.POINTER(ct.c_int))
     solout_type = ct.CFUNCTYPE(None, ct.POINTER(ct.c_int), ct.POINTER(ct.c_double), ct.POINTER(ct.c_double),
@@ -369,11 +375,15 @@ def radau5(tini, tend, yini, fun, mass_matrix, mujac, mljac, rtol, atol, t_eval=
                                ct.POINTER(ct.c_int), ct.POINTER(ct.c_double), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int))
 
     c_radau5 = c_integration.radau5_integration
-    c_radau5.argtypes = [ct.c_double, ct.c_double, ct.c_int,
-                         np.ctypeslib.ndpointer(dtype = np.float64),
-                         np.ctypeslib.ndpointer(dtype = np.float64),
-                         fcn_type, solout_type, ct.c_double, ct.c_double, ct.c_int,
+    c_radau5.argtypes = [ct.c_double, ct.c_double,
+                         ct.c_int,  np.ctypeslib.ndpointer(dtype = np.float64), np.ctypeslib.ndpointer(dtype = np.float64),
+                         fcn_type, mas_fcn_type, solout_type,
+                         ct.c_double, ct.c_double,
+                         ct.c_int, ct.c_int,
+                         ct.c_int, ct.c_int, ct.c_int,
+                         np.ctypeslib.ndpointer(dtype = np.int64), np.ctypeslib.ndpointer(dtype = np.float64),
                          ct.c_int, np.ctypeslib.ndpointer(dtype = np.int32)]
+
     c_radau5.restype = None
 
     # create callabel interfaces to the Python functions (time derivatives, jacobian, solution export, mass matrix)
@@ -382,7 +392,7 @@ def radau5(tini, tend, yini, fun, mass_matrix, mujac, mljac, rtol, atol, t_eval=
     callable_solout = solout_type(solout)
 
     yn = np.zeros(neq)
-    info= np.zeros(7, dtype=np.int32)
+    info= np.zeros(8, dtype=np.int32)
 
     itol=0 # tolerances are specified as scalars
     assert np.isscalar(rtol) and np.isscalar(atol), "`rtol` and `atol` must be scalars"
@@ -397,8 +407,8 @@ def radau5(tini, tend, yini, fun, mass_matrix, mujac, mljac, rtol, atol, t_eval=
 
     ### FILL IN PARAMETERS IWORK
     # to keep the same indices as in the Fortran code, the first component here is useless
-    iwork = [0 for i in range(21)]
-    work  = [0. for i in range(21)]
+    iwork = np.zeros((21,), dtype=np.int64)
+    work  = np.zeros((21,), dtype=np.float64)
 
     if (bDenseJacobian) and (imas==0) and bTryToUseHessenberg:
       # the Jacobian can be transformed to Hessenberg, speeding up computations for large systems with dense Jacobians
@@ -457,6 +467,8 @@ def radau5(tini, tend, yini, fun, mass_matrix, mujac, mljac, rtol, atol, t_eval=
       work[8] = step_evo_factor_bounds[0]
       work[9] = step_evo_factor_bounds[1]
 
+    print('iwork = ', iwork)
+    print('work = ', work)
 
     if t_eval is None:
       iout = 1 # all time steps will be exported
@@ -469,11 +481,17 @@ def radau5(tini, tend, yini, fun, mass_matrix, mujac, mljac, rtol, atol, t_eval=
     #################################
     ##  Call C-interface to Radau5 ##
     #################################
+    print('Calling C interface')
+    import sys; sys.stdout.flush()
+    iwork = iwork[1:]
+    work  = work[1:]
     c_radau5(tini, tend,
              neq, yini, yn,
              callable_fcn, callable_mass_fcn, callable_solout,
              rtol, atol,
-             iwork[1:], work[:1],
+             mljac, mujac,
+             imas, mlmas, mumas,
+             iwork, work,
              iout, info)
 
     ################
@@ -504,6 +522,7 @@ def radau5(tini, tend, yini, fun, mass_matrix, mujac, mljac, rtol, atol, t_eval=
     if IDID==-3:  out.msg='STEP SIZE BECOMES TOO SMALL'
     if IDID==-4:  out.msg='MATRIX IS REPEATEDLY SINGULAR'
      
+    print(f'IDID={IDID}, msg={out.msg}')
     return out
 
 #############################################################################

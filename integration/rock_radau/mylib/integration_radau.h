@@ -3,10 +3,29 @@
 
 typedef void(*func_radau)(int*, double*, double*, double*, double*, int*);
 
+typedef void(*func_mas_radau)(int*, double*, double*, double*, double*, int*);
+
 typedef void(*func_solout_radau)(int*, double*, double*, double*, double*, int*, int*, double*, int*, int*);
 
-void radau5_integration(double tini, double tend, int n, double *yini, double *y, func_radau fcn,
-		        func_solout_radau solout, double rtol, double atol, int mljac, int iout, int *info);
+//void radau5_integration(double tini, double tend, int n, double *yini, double *y, func_radau fcn,
+//		        func_solout_radau solout, double rtol, double atol, int mljac, int iout, int //*info);
+                
+/*void radau5_integration(double tini, double tend,
+                        int n, // size of the system
+                        double *yini, // pointer to the initial solution vector
+                        double *y, //
+                        func_radau fcn, // interface to the Python time derivative function
+                        func_mas_radau mas_fcn, // mass matrix evaluation function
+                        func_solout_radau solout, // solution export function
+                        double rtol, double atol, // error tolerances (scalar only)
+                        int mljac, int mujac, // Jacobian lower and upper bandwiths
+                        int imas, int mlmas, int mumas, // Mass matrix lower and upper bandwiths
+                        int *iwork_in, // integer parameters
+                        double *work_in, // decimal parameters
+                        int iout,  // solution export mode
+                        int *info); // statistics
+*/
+void radau5_integration(double tini, double tend, int n, double *yini, double *y, func_radau fcn, func_mas_radau mas_fcn, func_solout_radau solout, double rtol, double atol, int mljac, int mujac, int imas, int mlmas, int mumas, int *iwork_in, double *work_in, int iout, int *info);
 
 void radau5(int *n, func_radau fcn, double *x, double *y, double *xend, double *h,
             double *rtol, double *atol, int *itol,
