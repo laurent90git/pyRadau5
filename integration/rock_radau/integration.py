@@ -282,11 +282,14 @@ class radau_result:
 #        self.nsol = nsol
 
 #############################################################################
-def radau5(tini, tend, yini, fun, mass_matrix, mujac, mljac, rtol, atol, t_eval=None,
-    nmax_step = 10000, max_step=None,
+def radau5(tini, tend, yini, fun,
+    mujac, mljac,
+    mass_matrix=None, mlmas=None, mumas=None, var_index=None,
+    rtol=1e-4, atol=1e-4, t_eval=None,
+    nmax_step=np.iinfo(np.int32).max, max_step=None, first_step=0.,
     max_ite_newton=None, bUseExtrapolatedGuess=None, bUsePredictiveController=None,
-    safetyFactor=None, jacobianRecomputeFactor=None, newton_tol=None, deadzone=None, step_evo_factor_bounds=None,
-    var_index=None):
+    jacobianRecomputeFactor=None, newton_tol=None, bTryToUseHessenberg=False,
+    deadzone=None, step_evo_factor_bounds=None, safetyFactor=None):
     """ njac = demi-largeur de bande de la matrice jacobienne ( (p-1)/2 si p-diagonale)
     """
 
@@ -317,49 +320,78 @@ def radau5(tini, tend, yini, fun, mass_matrix, mujac, mljac, rtol, atol, t_eval=
       except ImportError:
         def bandwith(matrix):
           lband=uband=0
-          for i in range(matrix.shape[0]):
+          assert matrix.shape[0]==matrix.shape[1], "only square mass matrices are allowed !"
+          n = matrix.shape[0]
+          for i in range(n):
             for j in range(i):
               if matrix[i,j]!=0:
                 lband = max(lband, i-j)
-            for j in range(i,matrix.shape[0]):
+            for j in range(i,n):
               if matrix[i,j]!=0:
                 uband = max(uband, j-i)
-          uband = min(uband+1, matrix.shape[0])
-          lband = min(lband+1, matrix.shape[0]) # TODO: check this problematic definition of the bandwith (it('s the only to have uband=lband=n for a dense matrix...
+          if uband==n-1:
+            uband=n
+          if lband==n-1:
+            lband=n
+#          uband = min(uband+1, matrix.shape[0])
+#          lband = min(lband+1, matrix.shape[0]) # TODO: check this problematic definition of the bandwith (it('s the only to have uband=lband=n for a dense matrix...
           print(f'uband={uband}, lband={lband}')
           return (lband, uband)
-
-      mlmas, mumas = bandwith( mass_matrix ) # determine bandwith
+      if mlmas is None:
+        mlmas, mumas = bandwith( mass_matrix ) # determine bandwith
       imas = 1
 
-    def mass_fcn(n, am, lmas, rpar, ipar):
+    def mass_fcn(n, am_in, lmas, rpar, ipar):
+#        am = am_in # untrasnformed case
+        am = np.ctypeslib.as_array(am_in, shape=(lmas[0], n[0]))
+        print('Calling mass matrix function')
+        print('lmas=',lmas[0])
+        print('n=',n[0])
+#        for i in range(lmas[0]):
+#          print(f'am[{i}]=',am[i])
         assert n[0]==neq
         if mlmas==neq and mumas==neq: # full matrix
-          for i in range(n[0]):
-            for j in range(max(0,i-mlmas), min(neq,i+mumas)):
-              am[i-j+mumas+1,j][j] = mass_matrix[i,j]
-
-          # for debug checks
-          mass_np = np.ctypeslib.as_array(y, shape=(lmas[0], n[0])) # transform input into a Numpy array
-          reconstructed_mass_matrix = np.zeros((neq,neq))
-          for i in range(n[0]):
-            for j in range(max(0,i-mlmas), min(neq,i+mumas)):
-              reconstructed_mass_matrix[i,j] = am[i-j+mumas+1,j][j]
-          assert np.allclose(reconstructed_mass_matrix, mass_matrix, rtol=1e-13, atol=1e-13), 'mass matrix is wrongly transcribed'
-
-        else:
+          print(' mass matrix is dense')
           for i in range(n[0]): # transform back from Numpy #TODO: faster way ?
             for j in range(n[0]):
               am[i][j] = mass_matrix[i,j]
+          # for debug checks
+          mass_np = np.ctypeslib.as_array(am, shape=(lmas[0], n[0])) # transform input into a Numpy array
+          reconstructed_mass_matrix = np.zeros((neq,neq))
+          print('mass_np=', mass_np)
+        else: # sparse matrix
+          print(' mass matrix is not dense')
+          for i in range(n[0]):
+            #print(f'i={i}')
+            for j in range(max(0,i-mlmas), min(neq,i+mumas)+1):
+              #print(f' j={j}')
+              i2 = i-j+mumas#+1
+           #   print(f' i-j+mumas+1=', i2)
+          #    print('   mass_matrix[i,j]=',mass_matrix[i,j])
+         #     print('   am[i-j+mumas+1][j]=',am[i2][j])
+              am[i2][j] = mass_matrix[i,j]
+        #      print('-> am[i-j+mumas+1][j]=',am[i2][j])
+          print('after copy')
+      #    for i in range(lmas[0]):
+       #     print(f'   am[{i}]=',am[i])
+
+          # for debug checks
+          mass_np = np.ctypeslib.as_array(am, shape=(lmas[0], n[0])) # transform input into a Numpy array
+          reconstructed_mass_matrix = np.zeros((neq,neq))
+          print('mass_np=', mass_np)
+        #TODO:check diagonals are equal
+        #  for i in range(n[0]):
+        #    for j in range(max(0,i-mlmas), min(neq,i+mumas)):
+        #      reconstructed_mass_matrix[i,j] = mass_np[i-j+mumas,j][j]
+        #  assert np.allclose(reconstructed_mass_matrix, mass_matrix, rtol=1e-13, atol=1e-13), 'mass matrix is wrongly transcribed'
+
 
 
 
     def solout(nr, told, t, y, cont, lrc, n, rpar, ipar, irtrn):
+        print(f'solout called after step tn={told[0]} to tnp1={t[0]}')
         tsol.append(t[0])
-        y_np = np.ctypeslib.as_array(y, shape=(n[0],)) # transform input into a Numpy array
-      #  tmp = []
-       # for i in range(n[0]):
-        #    tmp.append(y[i])
+        y_np = np.ctypeslib.as_array(y, shape=(n[0],)).copy() # transform input into a Numpy array
         ysol.append(y_np)
         irtrn[0] = 1 # if <0, Radau5 will exit --> TODO: handle events with that ?
 
@@ -375,13 +407,13 @@ def radau5(tini, tend, yini, fun, mass_matrix, mujac, mljac, rtol, atol, t_eval=
                                ct.POINTER(ct.c_int), ct.POINTER(ct.c_double), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int))
 
     c_radau5 = c_integration.radau5_integration
-    c_radau5.argtypes = [ct.c_double, ct.c_double,
+    c_radau5.argtypes = [ct.c_double, ct.c_double, ct.c_double,
                          ct.c_int,  np.ctypeslib.ndpointer(dtype = np.float64), np.ctypeslib.ndpointer(dtype = np.float64),
                          fcn_type, mas_fcn_type, solout_type,
                          ct.c_double, ct.c_double,
                          ct.c_int, ct.c_int,
                          ct.c_int, ct.c_int, ct.c_int,
-                         np.ctypeslib.ndpointer(dtype = np.int64), np.ctypeslib.ndpointer(dtype = np.float64),
+                         np.ctypeslib.ndpointer(dtype = np.int32), np.ctypeslib.ndpointer(dtype = np.float64),
                          ct.c_int, np.ctypeslib.ndpointer(dtype = np.int32)]
 
     c_radau5.restype = None
@@ -407,7 +439,7 @@ def radau5(tini, tend, yini, fun, mass_matrix, mujac, mljac, rtol, atol, t_eval=
 
     ### FILL IN PARAMETERS IWORK
     # to keep the same indices as in the Fortran code, the first component here is useless
-    iwork = np.zeros((21,), dtype=np.int64)
+    iwork = np.zeros((21,), dtype=np.int32)
     work  = np.zeros((21,), dtype=np.float64)
 
     if (bDenseJacobian) and (imas==0) and bTryToUseHessenberg:
@@ -485,7 +517,7 @@ def radau5(tini, tend, yini, fun, mass_matrix, mujac, mljac, rtol, atol, t_eval=
     import sys; sys.stdout.flush()
     iwork = iwork[1:]
     work  = work[1:]
-    c_radau5(tini, tend,
+    c_radau5(tini, tend, first_step,
              neq, yini, yn,
              callable_fcn, callable_mass_fcn, callable_solout,
              rtol, atol,
@@ -514,7 +546,7 @@ def radau5(tini, tend, yini, fun, mass_matrix, mujac, mljac, rtol, atol, t_eval=
     out.nsol   = info[6]  # number of forward-backward substitutions
     
     IDID = info[7] # exit code
-    out.success = IDID > 0
+    out.success = (IDID > 0)
     if IDID== 1:  out.msg='COMPUTATION SUCCESSFUL'
     if IDID== 2:  out.msg='COMPUT. SUCCESSFUL (INTERRUPTED BY SOLOUT)'
     if IDID==-1:  out.msg='INPUT IS NOT CONSISTENT'

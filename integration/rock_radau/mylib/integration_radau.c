@@ -2,7 +2,7 @@
 
 #include "integration_radau.h"
 //void radau5_integration(double tini, double tend, int n, double *yini, double *y, func_radau fcn, func_mas_radau mas_fcn, func_solout_radau solout, double rtol, double atol, int mljac, int mujac, int imas, int mlmas, int mumas, int *iwork_in, double *work_in, int iout, int *info)
-void radau5_integration(double tini, double tend,
+void radau5_integration(double tini, double tend, double first_step,
                         int n, // size of the system
                         double *yini, // pointer to the initial solution vector
                         double *y, //
@@ -22,6 +22,7 @@ void radau5_integration(double tini, double tend,
   printf("n=%i, rtol=%f, atol=%f\n", n, rtol, atol);
   printf("mljac=%i, mujac=%i\n", mljac, mujac);
   printf("imas=%i, mlmas=%i, mumas=%i\n", imas, mlmas, mumas);
+  printf("iout=%i\n", iout);
   
   // both rtol and atol are scalars
   int itol=0; // tolerances are scalar
@@ -50,7 +51,7 @@ void radau5_integration(double tini, double tend,
 
   // initial time t and initial time step  dt 
   double t=tini;
-  double dt=0.;
+  double dt=first_step;
 
   int i;
   // initial solution
@@ -68,7 +69,7 @@ void radau5_integration(double tini, double tend,
   radau5(&n, fcn, &t, y, &tend, &dt,
          &rtol, &atol, &itol,
          jac_radau, &ijac, &mljac, &mujac,
-         mas_radau, &imas, &mlmas, &mumas,
+         mas_fcn, &imas, &mlmas, &mumas,
          solout, &iout,
          work, &lwork, iwork, &liwork,
          &rpar, &ipar, &idid);
@@ -89,6 +90,6 @@ void jac_radau(int *n, double *x, double *y, double *dfy, int *ldfy, double *rpa
 }
 
 
-void mas_radau(int *n,double *am, int *lmas,int *rpar, int *ipar)
+/*void mas_radau(int *n,double *am, int *lmas,int *rpar, int *ipar)
 {
-}
+}*/
