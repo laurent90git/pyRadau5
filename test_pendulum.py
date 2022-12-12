@@ -142,7 +142,7 @@ def generateSytem(chosen_index, theta_0=np.pi/2, theta_dot0=0., r0=1., m=1, g=9.
 
 if __name__=='__main__':
     # Test the pendulum
-    from scipy.integrate import solve_ivp
+    # from scipy.integrate import solve_ivp
     from numpy.testing import (assert_, assert_allclose,
                            assert_equal, assert_no_warnings, suppress_warnings)
     import matplotlib.pyplot as plt
@@ -158,7 +158,7 @@ if __name__=='__main__':
 
 
     ## Physical parameters for the pendulum
-    theta_0=np.pi/6 # initial angle
+    theta_0=np.pi/2 # initial angle
     theta_dot0=0. # initial angular velocity
     r0=3.  # rod length
     m=1.   # mass
@@ -167,31 +167,91 @@ if __name__=='__main__':
     dae_fun, jac_dae, mass, Xini, var_index= generateSytem(chosen_index, theta_0, theta_dot0, r0, m, g)
     n = Xini.size
     # jac_dae = None
-    #%% Solve the DAE
     print(f'Solving the index {chosen_index} formulation')
-    sol = integration.radau5(tini=0., tend=tf, yini=Xini,
+
+    #%% Solve the DAE
+    solfort = integration.radau5(tini=0., tend=tf, yini=Xini,
                         fun=dae_fun,
                         mljac=n, mujac=n,
                         mlmas=0, mumas=0,
-                        rtol=1e-4, atol=1e-4,
+                        rtol=rtol, atol=atol,
                         t_eval=None,
                         nmax_step = 100000,
                         max_step = tf,
-                        max_ite_newton=None, bUseExtrapolatedGuess=None,
-                        bUsePredictiveController=None, safetyFactor=None,
+                        first_step=1e-6,
+                        max_ite_newton=6, bUseExtrapolatedGuess=None,
+                        bUsePredictiveController=True, safetyFactor=None,
                         deadzone=None, step_evo_factor_bounds=None,
                         jacobianRecomputeFactor=None, newton_tol=None,
-                        mass_matrix=mass, var_index=var_index)
-
-    print("DAE of index {} {} in {} time steps, {} fev, {} jev, {} LUdec".format(
-          chosen_index, 'solved'*sol.success+(1-sol.success)*'failed',
-          sol.t.size, sol.nfev, sol.njev, sol.ndec))
+                        mass_matrix=mass, var_index=var_index,
+                        bPrint=False)
+    sol=solfort
+    if solfort.success:
+        state='solved'
+    else:
+        state='failed'
+    print("Scipy DAE of index {} {}".format(chosen_index, state))
+    print("{} time steps ({} = {} accepted + {} rejected)".format(
+      sol.t.size, sol.nstep, sol.naccpt, sol.nrejct))
+    print("{} fev, {} jev, {} LUdec, {} linsolves".format(
+          sol.nfev, sol.njev, sol.ndec, sol.nsol))
 
     # recover the time history of each variable
-    x=sol.y[0,:]; y=sol.y[1,:]; vx=sol.y[2,:]; vy=sol.y[3,:]; lbda=sol.y[4,:]
+    x,y,vx,vy,lbda = sol.y
     T = lbda * np.sqrt(x**2+y**2)
     theta= np.arctan(x/y)
+    dicfort = {'t':sol.t,
+               'x':x,
+               'y':y,
+               'vx':vx,
+               'vy':vy,
+               'theta':theta,
+               'lbda': lbda,
+               'T': T}
 
+
+
+
+    #%% Solve the DAE with Scipy's modified Radau
+    import sys
+    sys.path.append('/stck/lfrancoi/GIT/DAE-Scipy')
+    from radauDAE import RadauDAE
+    from radauDAE import solve_ivp_custom as solve_ivp
+    solpy = solve_ivp(fun=dae_fun, t_span=(0., tf), y0=Xini, max_step=tf,
+                    rtol=rtol, atol=atol, jac=jac_dae, jac_sparsity=None,
+                    method=RadauDAE,
+                    first_step=1e-6, dense_output=True,
+                    mass_matrix=mass, bPrint=bPrint,
+                    max_newton_ite=6, min_factor=0.2, max_factor=10,
+                    var_index=var_index,
+                    # newton_tol=1e-4,
+                    scale_residuals = True,
+                    scale_newton_norm = False,
+                    scale_error = True,
+                    max_bad_ite=1,
+                    bDebug=bDebug)
+    sol = solpy
+    if sol.success:
+        state='solved'
+    else:
+        state='failed'
+    print("\nScipy DAE of index {} {}".format(chosen_index, state))
+    print("{} time steps ({} = {} accepted + {} rejected + {} failed)".format(
+      sol.t.size, sol.solver.nstep, sol.solver.naccpt, sol.solver.nrejct, sol.solver.nfailed))
+    print("{} fev, {} jev, {} LUdec, {} linsolves, {} linsolves for error estimation".format(
+          sol.nfev, sol.njev, sol.nlu, sol.solver.nlusove, sol.solver.nlusolve_errorest))
+ 
+    x,y,vx,vy,lbda = sol.y
+    T = lbda * np.sqrt(x**2+y**2)
+    theta= np.arctan(x/y)
+    dicpy   = {'t':sol.t,
+               'x':x,
+               'y':y,
+               'vx':vx,
+               'vy':vy,
+               'theta':theta,
+               'lbda': lbda,
+               'T': T}
     #%% Compute true solution (ODE on the angle in polar coordinates)
     def fun_ode(t,X):
       theta=X[0]; theta_dot = X[1]
@@ -200,7 +260,7 @@ if __name__=='__main__':
 
     Xini_ode= np.array([theta_0,theta_dot0])
     sol_ode = solve_ivp(fun=fun_ode, t_span=(0., tf), y0=Xini_ode,
-                    rtol=rtol, atol=atol, max_step=tf/10, method='DOP853',
+                    rtol=1e-12, atol=1e-12, max_step=tf/10, method='DOP853',
                     dense_output=True)
     theta_ode = sol_ode.y[0,:]
     theta_dot = sol_ode.y[1,:]
@@ -209,44 +269,60 @@ if __name__=='__main__':
     vx_ode =  r0*theta_dot*np.cos(theta_ode)
     vy_ode =  r0*theta_dot*np.sin(theta_ode)
     T_ode = m*r0*theta_dot**2 + m*g*np.cos(theta_ode)
+    lbda_ode = T_ode / np.sqrt(x_ode**2+y_ode**2)
+
+    dicref = {'t':sol_ode.t,
+               'x':x_ode,
+               'y':y_ode,
+               'vx':vx_ode,
+               'vy':vy_ode,
+               'theta':theta_ode,
+               'lbda': lbda_ode,
+               'T': T_ode}
+
 
     #%% Compare the DAE solution and the true solution
     plt.figure()
-    plt.plot(sol.t,x, color='tab:orange', linestyle='-', label=r'$x_{DAE}$')
-    plt.plot(sol_ode.t,x_ode, color='tab:orange', linestyle='--', label=r'$x_{ODE}$')
-    plt.plot(sol.t,y, color='tab:blue', linestyle='-', label=r'$y_{DAE}$')
-    plt.plot(sol_ode.t,y_ode, color='tab:blue', linestyle='--', label=r'$y_{ODE}$')
-    plt.plot(sol.t,y**2+x**2, color='tab:green', label=r'$x_{DAE}^2 + y_{DAE}^2$')
+    for sol,name,linestyle,marker,color in [
+                           (dicfort,'fortran','-','+','tab:blue'),
+                           (dicpy,'py',':','o','tab:orange'),
+                            (dicref, 'ref', '--',None,'tab:green')
+                           ]:
+      plt.plot(sol['t'],sol['x'], color=color, linestyle=linestyle, marker=marker, label=None)#r'$x_{{}}$'.format(name))
+      # plt.plot(sol.t,y, color='tab:blue', linestyle='--', label=r'$y_{DAE}$')
+      plt.plot(sol['t'],sol['y']**2+sol['x']**2, color=color, marker=marker, linestyle=linestyle, label=None)#r'$x_{{}}^2 + y_{{}}^2$'.format(name,name))
+      plt.plot(np.nan, np.nan, linestyle=linestyle, color=color, marker=marker, label=name)
     plt.grid()
     plt.legend()
     plt.title('Comparison with the true solution')
 
     #%% Analyze constraint violations
     # we check how well equations (5), (6) and (7) are respected
-    fig,ax = plt.subplots(3,1,sharex=True)
-    constraint = [None for i in range(3)]
-    constraint[2] = x**2 + y**2 - r0**2 #index 3
-    constraint[1] = x*vx+y*vy #index 12
-    constraint[0] = lbda*(x**2+y**2)/m + g*y - (vx**2 + vy**2) #index 1
-    for i in range(len(constraint)):
-      ax[i].plot(sol.t, constraint[i])
-      # ax[i].semilogx(sol.t, np.abs(constraint[i]))
+    fig,ax = plt.subplots(4,1,sharex=True)
+    for sol,name,linestyle,marker,color in [
+                       (dicfort,'fortran','-','+','tab:blue'),
+                       (dicpy,'py',':','.','tab:orange'),
+                        # (dicref, 'ref', '--',None,'tab:green')
+                       ]:
+      for i in range(3):
+        t,x,y,vx,vy,lbda = sol['t'], sol['x'], sol['y'], sol['vx'], sol['vy'], sol['lbda']
+        if i==0:
+          constraint = lbda*(x**2+y**2)/m + g*y - (vx**2 + vy**2) #index 1
+        if i==1:
+          constraint = x*vx+y*vy #index 2
+        if i==2:
+          constraint = x**2 + y**2 - r0**2 #index 3
+        
+        # ax[i].plot(t, constraint, marker=marker, linestyle=linestyle, label=name, color=color)
+        ax[i].semilogy(t, np.abs(constraint), marker=marker, linestyle=linestyle, label=name, color=color)
+        
+      ax[3].semilogy(t[:-1], np.diff(t), marker=marker, linestyle=linestyle, label=name, color=color)
+    for i in range(4):
       ax[i].grid()
+    for i in range(3):
       ax[i].set_ylabel('index {}'.format(i+1))
+    ax[3].set_ylabel('dt')
+    ax[-1].legend()
     ax[-1].set_xlabel('t (s)')
     fig.suptitle('Constraints violation')
 
-
-    #%% Plot the solution and some useful statistics
-    fig, ax = plt.subplots(5,1,sharex=True, figsize=np.array([1.5,3])*5)
-    i=0
-    ax[i].plot(sol.t, x,     color='tab:orange', linestyle='-', linewidth=2, marker='.', label='x')
-    ax[i].plot(sol.t, y,     color='tab:blue', linestyle='-', linewidth=2, marker='.', label='y')
-    ax[i].plot(sol_ode.t, x_ode,     color='tab:orange', linestyle='--', linewidth=2, marker=None, label='x ODE')
-    ax[i].plot(sol_ode.t, y_ode,     color='tab:blue', linestyle='--', linewidth=2, marker=None, label='y ODE')
-    ax[i].set_ylim(-1.2*r0, 1.2*r0)
-    ax[i].legend(frameon=False)
-    ax[i].grid()
-    ax[i].set_ylabel('positions')
-    
-    plt.show()

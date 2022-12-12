@@ -17,12 +17,13 @@ void radau5_integration(double tini, double tend, double first_step,
                         int iout,  // solution export mode
                         int *info) // statistics
 {
-  printf("1\n");
-  
-  printf("n=%i, rtol=%f, atol=%f\n", n, rtol, atol);
-  printf("mljac=%i, mujac=%i\n", mljac, mujac);
-  printf("imas=%i, mlmas=%i, mumas=%i\n", imas, mlmas, mumas);
-  printf("iout=%i\n", iout);
+  int bPrint=0;
+  if (bPrint) {  
+    printf("n=%i, rtol=%f, atol=%f\n", n, rtol, atol);
+    printf("mljac=%i, mujac=%i\n", mljac, mujac);
+    printf("imas=%i, mlmas=%i, mumas=%i\n", imas, mlmas, mumas);
+    printf("iout=%i\n", iout);
+  }
   
   // both rtol and atol are scalars
   int itol=0; // tolerances are scalar
@@ -39,9 +40,11 @@ void radau5_integration(double tini, double tend, double first_step,
   double work[lwork];
   int iwork[liwork];
 
-  printf("itol=%i, ijac=%i, ljac=%i, le=%i, lmas=%i\n", itol, ijac, ljac, le, lmas);
-  printf("lwork=%i, liwork=%i\n", lwork, liwork);
-
+  if (bPrint) { 
+    printf("itol=%i, ijac=%i, ljac=%i, le=%i, lmas=%i\n", itol, ijac, ljac, le, lmas);
+    printf("lwork=%i, liwork=%i\n", lwork, liwork);
+  }
+  
   // real and integer parameters
   double rpar;
   int ipar;
@@ -59,11 +62,13 @@ void radau5_integration(double tini, double tend, double first_step,
 
   for(i=0; i<20; i++)
   {
-    printf("  iwork_in[%2i]  = %16i, \t work_in[%2i]  = %16f\n",i, iwork_in[i],i,work_in[i]);
+    if (bPrint) { 
+      printf("  iwork_in[%2i]  = %16i, \t work_in[%2i]  = %16f\n",i, iwork_in[i],i,work_in[i]);
+    }
     iwork[i] = iwork_in[i];
     work[i]  =  work_in[i];
   }
-  printf("Calling radau from C interface\n");
+  if (bPrint) printf("Calling radau from C interface\n");
 
   // directly calling fortran
   radau5(&n, fcn, &t, y, &tend, &dt,
