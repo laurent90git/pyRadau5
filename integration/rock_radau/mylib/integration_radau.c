@@ -15,9 +15,9 @@ void radau5_integration(double tini, double tend, double first_step,
                         int *iwork_in, // integer parameters
                         double *work_in, // decimal parameters
                         int iout,  // solution export mode
-                        int *info) // statistics
+                        int *info, // statistics
+                        int bPrint) // Print flag
 {
-  int bPrint=0;
   if (bPrint) {  
     printf("n=%i, rtol=%f, atol=%f\n", n, rtol, atol);
     printf("mljac=%i, mujac=%i\n", mljac, mujac);
@@ -77,7 +77,7 @@ void radau5_integration(double tini, double tend, double first_step,
          mas_fcn, &imas, &mlmas, &mumas,
          solout, &iout,
          work, &lwork, iwork, &liwork,
-         &rpar, &ipar, &idid);
+         &rpar, &ipar, &idid, &bPrint);
          
   // save & print statistics
   info[0] = iwork[13];  

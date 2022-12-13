@@ -1273,12 +1273,12 @@ C
       SUBROUTINE ESTRAD(N,FJAC,LDJAC,MLJAC,MUJAC,FMAS,LDMAS,MLMAS,MUMAS,
      &          H,DD1,DD2,DD3,FCN,NFCN,Y0,Y,IJOB,X,M1,M2,NM1,
      &          E1,LDE1,Z1,Z2,Z3,CONT,F1,F2,IP1,IPHES,SCAL,ERR,
-     &          FIRST,REJECT,FAC1,RPAR,IPAR)
+     &          FIRST,REJECT,FAC1,RPAR,IPAR, bPrint)
       IMPLICIT DOUBLE PRECISION (A-H,O-Z)
       DIMENSION FJAC(LDJAC,N),FMAS(LDMAS,NM1),E1(LDE1,NM1),IP1(NM1),
      &     SCAL(N),IPHES(N),Z1(N),Z2(N),Z3(N),F1(N),F2(N),Y0(N),Y(N)
       DIMENSION CONT(N),RPAR(1),IPAR(1)
-      LOGICAL FIRST,REJECT
+      LOGICAL FIRST,REJECT, bPrint
       COMMON/LINAL/MLE,MUE,MBJAC,MBB,MDIAG,MDIFF,MBDIAG
       HEE1=DD1/H
       HEE2=DD2/H
@@ -1501,8 +1501,9 @@ C
       DO  I=1,N
          ERR=ERR+(CONT(I)/SCAL(I))**2
       END DO
+      if (bPrint) print*, '  1st error estimate=', ERR
       ERR=MAX(SQRT(ERR/N),1.D-10)
-C
+      
       IF (ERR.LT.1.D0) RETURN
       IF (FIRST.OR.REJECT) THEN
           DO I=1,N
@@ -1589,6 +1590,7 @@ C -----------------------------------
           DO I=1,N
              ERR=ERR+(CONT(I)/SCAL(I))**2
           END DO
+          if (bPrint) print*, '  2nd error estimate=', ERR
           ERR=MAX(SQRT(ERR/N),1.D-10)
        END IF
        RETURN

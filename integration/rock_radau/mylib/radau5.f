@@ -3,7 +3,8 @@
      &                  JAC ,IJAC,MLJAC,MUJAC,
      &                  MAS ,IMAS,MLMAS,MUMAS,
      &                  SOLOUT,IOUT,
-     &                  WORK,LWORK,IWORK,LIWORK,RPAR,IPAR,IDID)
+     &                  WORK,LWORK,IWORK,LIWORK,RPAR,IPAR,IDID,
+     &                  bPrintInteger)
 C ----------------------------------------------------------
 C     NUMERICAL SOLUTION OF A STIFF (OR DIFFERENTIAL ALGEBRAIC)
 C     SYSTEM OF FIRST 0RDER ORDINARY DIFFERENTIAL EQUATIONS
@@ -373,8 +374,17 @@ C *** *** *** *** *** *** *** *** *** *** *** *** ***
       IMPLICIT DOUBLE PRECISION (A-H,O-Z)
       DIMENSION Y(N),ATOL(*),RTOL(*),WORK(LWORK),IWORK(LIWORK)
       DIMENSION RPAR(*),IPAR(*)
-      LOGICAL IMPLCT,JBAND,ARRET,STARTN,PRED
+      LOGICAL IMPLCT,JBAND,ARRET,STARTN,PRED, bPrint, bChangeTolerances
+      INTEGER bPrintInteger
       EXTERNAL FCN,JAC,MAS,SOLOUT
+      
+      print*, 'bPrintInteger=', bPrintInteger
+      if (bPrintInteger > 0) then
+        bPrint = .true.
+      else
+        bPrint = .false.
+      endif
+      bChangeTolerances = .false. ! do not cheat :)
 C *** *** *** *** *** *** ***
 C        SETTING THE PARAMETERS 
 C *** *** *** *** *** *** ***
@@ -398,27 +408,32 @@ C -------- UROUND   SMALLEST NUMBER SATISFYING 1.0D0+UROUND>1.0D0
       END IF
 C -------- CHECK AND CHANGE THE TOLERANCES
       EXPM=2.0D0/3.0D0
-      IF (ITOL.EQ.0) THEN
+      IF (ITOL.EQ.0) THEN ! scalar tolerances
           IF (ATOL(1).LE.0.D0.OR.RTOL(1).LE.10.D0*UROUND) THEN
               WRITE (6,*) ' TOLERANCES ARE TOO SMALL'
               ARRET=.TRUE.
           ELSE
-              QUOT=ATOL(1)/RTOL(1)
-              RTOL(1)=0.1D0*RTOL(1)**EXPM
-              ATOL(1)=RTOL(1)*QUOT
+              if (bChangeTolerances) then
+                  QUOT=ATOL(1)/RTOL(1)
+                  RTOL(1)=0.1D0*RTOL(1)**EXPM !TODO: pourquoi ????
+                  ATOL(1)=RTOL(1)*QUOT
+              endif
           END IF
-      ELSE
+      ELSE ! vector tolerances
           DO I=1,N
-          IF (ATOL(I).LE.0.D0.OR.RTOL(I).LE.10.D0*UROUND) THEN
-              WRITE (6,*) ' TOLERANCES(',I,') ARE TOO SMALL'
-              ARRET=.TRUE.
-          ELSE
-              QUOT=ATOL(I)/RTOL(I)
-              RTOL(I)=0.1D0*RTOL(I)**EXPM
-              ATOL(I)=RTOL(I)*QUOT
-          END IF
+              IF (ATOL(I).LE.0.D0.OR.RTOL(I).LE.10.D0*UROUND) THEN
+                  WRITE (6,*) ' TOLERANCES(',I,') ARE TOO SMALL'
+                  ARRET=.TRUE.
+              ELSE
+                if (bChangeTolerances) then
+                    QUOT=ATOL(I)/RTOL(I)
+                    RTOL(I)=0.1D0*RTOL(I)**EXPM
+                    ATOL(I)=RTOL(I)*QUOT
+                endif
+              END IF
           END DO
       END IF
+      if (bChangeTolerances .and. bPrint) print*, 'changed tolerances to rtol=', RTOL(1), ', atol=', ATOL(1)
 C -------- NMAX , THE MAXIMAL NUMBER OF STEPS -----
       IF (IWORK(2).EQ.0) THEN
          NMAX=100000
@@ -635,7 +650,7 @@ C -------- CALL TO CORE INTEGRATOR ------------
      &   WORK(IEZ3),WORK(IEY0),WORK(IESCAL),WORK(IEF1),WORK(IEF2),
      &   WORK(IEF3),WORK(IEJAC),WORK(IEE1),WORK(IEE2R),WORK(IEE2I),
      &   WORK(IEMAS),IWORK(IEIP1),IWORK(IEIP2),IWORK(IEIPH),
-     &   WORK(IECON),NFCN,NJAC,NSTEP,NACCPT,NREJCT,NDEC,NSOL,RPAR,IPAR)
+     &   WORK(IECON),NFCN,NJAC,NSTEP,NACCPT,NREJCT,NDEC,NSOL,RPAR,IPAR, bPrint)
       IWORK(14)=NFCN
       IWORK(15)=NJAC
       IWORK(16)=NSTEP
@@ -644,18 +659,20 @@ C -------- CALL TO CORE INTEGRATOR ------------
       IWORK(19)=NDEC
       IWORK(20)=NSOL
 C -------- RESTORE TOLERANCES
-      EXPM=1.0D0/EXPM
-      IF (ITOL.EQ.0) THEN
-              QUOT=ATOL(1)/RTOL(1)
-              RTOL(1)=(10.0D0*RTOL(1))**EXPM
-              ATOL(1)=RTOL(1)*QUOT
-      ELSE
-          DO I=1,N
-              QUOT=ATOL(I)/RTOL(I)
-              RTOL(I)=(10.0D0*RTOL(I))**EXPM
-              ATOL(I)=RTOL(I)*QUOT
-          END DO
-      END IF
+      if (bChangeTolerances) then
+          EXPM=1.0D0/EXPM
+          IF (ITOL.EQ.0) THEN
+                  QUOT=ATOL(1)/RTOL(1)
+                  RTOL(1)=(10.0D0*RTOL(1))**EXPM
+                  ATOL(1)=RTOL(1)*QUOT
+          ELSE
+              DO I=1,N
+                  QUOT=ATOL(I)/RTOL(I)
+                  RTOL(I)=(10.0D0*RTOL(I))**EXPM
+                  ATOL(I)=RTOL(I)*QUOT
+              END DO
+          END IF
+      endif
 C ----------- RETURN -----------
       RETURN
       END
@@ -670,7 +687,7 @@ C
      &   NIND1,NIND2,NIND3,PRED,FACL,FACR,M1,M2,NM1,
      &   IMPLCT,BANDED,LDJAC,LDE1,LDMAS,Z1,Z2,Z3,
      &   Y0,SCAL,F1,F2,F3,FJAC,E1,E2R,E2I,FMAS,IP1,IP2,IPHES,
-     &   CONT,NFCN,NJAC,NSTEP,NACCPT,NREJCT,NDEC,NSOL,RPAR,IPAR)
+     &   CONT,NFCN,NJAC,NSTEP,NACCPT,NREJCT,NDEC,NSOL,RPAR,IPAR,bPrint)
 C ----------------------------------------------------------
 C     CORE INTEGRATOR FOR RADAU5
 C     PARAMETERS SAME AS IN RADAU5 WITH WORKSPACE ADDED 
@@ -688,10 +705,13 @@ C ----------------------------------------------------------
       LOGICAL REJECT,FIRST,IMPLCT,BANDED,CALJAC,STARTN,CALHES
       LOGICAL INDEX1,INDEX2,INDEX3,LAST,PRED
       EXTERNAL FCN
+      LOGICAL bPrint
+            
 C *** *** *** *** *** *** ***
 C  INITIALISATIONS
 C *** *** *** *** *** *** ***
 C --------- DUPLIFY N FOR COMMON BLOCK CONT -----
+      IF (bPrint) print*, 'Entering RADCOR'
       NN=N
       NN2=2*N
       NN3=3*N 
@@ -795,6 +815,7 @@ C *** *** *** *** *** *** ***
 C  COMPUTATION OF THE JACOBIAN
 C *** *** *** *** *** *** ***
       NJAC=NJAC+1
+      IF (bPrint) print*, 'Updating Jacobian'
       IF (IJAC.EQ.0) THEN
 C --- COMPUTE JACOBIAN MATRIX NUMERICALLY
          IF (BANDED) THEN
@@ -849,6 +870,7 @@ C --- COMPUTE THE MATRICES E1 AND E2 AND THEIR DECOMPOSITIONS
       FAC1=U1/H
       ALPHN=ALPH/H
       BETAN=BETA/H
+      IF (bPrint) print*, 'Decomposing matrices'
       CALL DECOMR(N,FJAC,LDJAC,FMAS,LDMAS,MLMAS,MUMAS,
      &            M1,M2,NM1,FAC1,E1,LDE1,IP1,IER,IJOB,CALHES,IPHES)
       IF (IER.NE.0) GOTO 78
@@ -858,23 +880,32 @@ C --- COMPUTE THE MATRICES E1 AND E2 AND THEIR DECOMPOSITIONS
       NDEC=NDEC+1
   30  CONTINUE
       NSTEP=NSTEP+1
+      if (bPrint) then
+        print*, ''
+        print*, 'step ', NSTEP, '(t=',X,', dt=',H,')'
+      endif
       IF (NSTEP.GT.NMAX) GOTO 178
       IF (0.1D0*ABS(H).LE.ABS(X)*UROUND) GOTO 177
-          IF (INDEX2) THEN
-             DO I=NIND1+1,NIND1+NIND2
-                SCAL(I)=SCAL(I)/HHFAC
-             END DO
-          END IF
-          IF (INDEX3) THEN
-             DO I=NIND1+NIND2+1,NIND1+NIND2+NIND3
-                SCAL(I)=SCAL(I)/(HHFAC*HHFAC)
-             END DO
-          END IF
+      
+      ! Update scaling for algebraic variables
+      IF (INDEX2) THEN
+         DO I=NIND1+1,NIND1+NIND2
+            SCAL(I)=SCAL(I)/HHFAC
+         END DO
+      END IF
+      IF (INDEX3) THEN
+         DO I=NIND1+NIND2+1,NIND1+NIND2+NIND3
+            SCAL(I)=SCAL(I)/(HHFAC*HHFAC)
+         END DO
+      END IF
+      if (bPrint) print*, 'HHFAC=',HHFAC
+      if (bPrint) print*, 'SCAL=',SCAL
       XPH=X+H
 C *** *** *** *** *** *** ***
 C  STARTING VALUES FOR NEWTON ITERATION
 C *** *** *** *** *** *** ***
       IF (FIRST.OR.STARTN) THEN
+         IF (bPrint) print*, '  Trivial initial guess'
          DO I=1,N
             Z1(I)=0.D0
             Z2(I)=0.D0
@@ -883,7 +914,8 @@ C *** *** *** *** *** *** ***
             F2(I)=0.D0
             F3(I)=0.D0
          END DO
-      ELSE
+      ELSE ! Extrapolate dense output of previous step
+         IF (bPrint) print*, '  Extrapolated initial guess'
          C3Q=H/HOLD
          C1Q=C1*C3Q
          C2Q=C2*C3Q
@@ -905,16 +937,21 @@ C *** *** *** *** *** *** ***
 C *** *** *** *** *** *** ***
 C  LOOP FOR THE SIMPLIFIED NEWTON ITERATION
 C *** *** *** *** *** *** ***
-            NEWT=0
+            NEWT=0 ! iteration counter
             FACCON=MAX(FACCON,UROUND)**0.8D0
             THETA=ABS(THET)
   40        CONTINUE
-            IF (NEWT.GE.NIT) GOTO 78
-C ---     COMPUTE THE RIGHT-HAND SIDE
+            IF (bPrint) print*, '  iter', NEWT,'/',NIT
+
+            IF (NEWT.GE.NIT) GOTO 78 ! Too many Newton iterations
+            
+            ! COMPUTE THE RIGHT-HAND SIDE
             DO I=1,N
                CONT(I)=Y(I)+Z1(I)
             END DO
             CALL FCN(N,X+C1*H,CONT,Z1,RPAR,IPAR)
+            !Z1 will be equal to FCN(t,y+z1), i.e. RHS evaluated at
+            !current first quadrature point iterate
             DO I=1,N
                CONT(I)=Y(I)+Z2(I)
             END DO
@@ -924,20 +961,22 @@ C ---     COMPUTE THE RIGHT-HAND SIDE
             END DO
             CALL FCN(N,XPH,CONT,Z3,RPAR,IPAR)
             NFCN=NFCN+3
-C ---     SOLVE THE LINEAR SYSTEMS
-           DO I=1,N
+            
+            ! SOLVE THE LINEAR SYSTEMS
+            DO I=1,N
               A1=Z1(I)
               A2=Z2(I)
               A3=Z3(I)
               Z1(I)=TI11*A1+TI12*A2+TI13*A3
               Z2(I)=TI21*A1+TI22*A2+TI23*A3
               Z3(I)=TI31*A1+TI32*A2+TI33*A3
-           END DO
+            END DO
         CALL SLVRAD(N,FJAC,LDJAC,MLJAC,MUJAC,FMAS,LDMAS,MLMAS,MUMAS,
      &          M1,M2,NM1,FAC1,ALPHN,BETAN,E1,E2R,E2I,LDE1,Z1,Z2,Z3,
      &          F1,F2,F3,CONT,IP1,IP2,IPHES,IER,IJOB)
             NSOL=NSOL+1
             NEWT=NEWT+1
+            ! Compute norm of Newton increment
             DYNO=0.D0
             DO I=1,N
                DENOM=SCAL(I)
@@ -945,28 +984,39 @@ C ---     SOLVE THE LINEAR SYSTEMS
      &          +(Z3(I)/DENOM)**2
             END DO
             DYNO=DSQRT(DYNO/N3)
-C ---     BAD CONVERGENCE OR NUMBER OF ITERATIONS TO LARGE
+            IF (bPrint) print*, '    Scaled norm of the increment: ', DYNO
+            
             IF (NEWT.GT.1.AND.NEWT.LT.NIT) THEN
-                THQ=DYNO/DYNOLD
+                THQ=DYNO/DYNOLD ! current convergence rate
                 IF (NEWT.EQ.2) THEN
                    THETA=THQ
                 ELSE
-                   THETA=SQRT(THQ*THQOLD)
+                   THETA=SQRT(THQ*THQOLD) ! some kind of rate smoothing ?
                 END IF
+                if (bPrint) print*, '    THQ=',THQ,', THETA=', THETA,', THQOLD=', THQOLD
                 THQOLD=THQ
                 IF (THETA.LT.0.99D0) THEN
                     FACCON=THETA/(1.0D0-THETA)
-                    DYTH=FACCON*DYNO*THETA**(NIT-1-NEWT)/FNEWT
-                    IF (DYTH.GE.1.0D0) THEN
+                    ! Estimated true error = FACCON * DYNO
+                    DYTH=FACCON*DYNO*THETA**(NIT-1-NEWT)/FNEWT ! Estimated true error after NIT iterations
+                    if (bPrint) then
+                        print*, '    Estimated true error  =',FACCON*DYNO
+                        print*, '    Estimated final error =',DYTH
+                    endif
+
+                    IF (DYTH.GE.1.0D0) THEN ! Newton will likely not converge to the desired precision within NIT iterations
+                         if (bPrint) print*, '    Newton will not converge to the desired precision'
                          QNEWT=DMAX1(1.0D-4,DMIN1(20.0D0,DYTH))
                          HHFAC=.8D0*QNEWT**(-1.0D0/(4.0D0+NIT-1-NEWT))
                          H=HHFAC*H
+                         if (bPrint) print*, '    QNEWT=',QNEWT, ', HHFAC=',HHFAC, ', H=',H
                          REJECT=.TRUE.
                          LAST=.FALSE.
                          IF (CALJAC) GOTO 20
                          GOTO 10
                     END IF
-                ELSE
+                ELSE ! Newton step diverges
+                    IF (bPrint) print*, '    Newton diverges'
                     GOTO 78
                 END IF
             END IF
@@ -982,12 +1032,16 @@ C ---     BAD CONVERGENCE OR NUMBER OF ITERATIONS TO LARGE
                Z2(I)=T21*F1I+T22*F2I+T23*F3I
                Z3(I)=T31*F1I+    F2I
             END DO
-            IF (FACCON*DYNO.GT.FNEWT) GOTO 40
-C --- ERROR ESTIMATION  
+            IF (FACCON*DYNO.GT.FNEWT) THEN
+                ! Perform another Newton step
+                GOTO 40
+            ENDIF
+      IF (bPrint) print*, '  Newton converged'
+      ! ERROR ESTIMATION
       CALL ESTRAD (N,FJAC,LDJAC,MLJAC,MUJAC,FMAS,LDMAS,MLMAS,MUMAS,
      &          H,DD1,DD2,DD3,FCN,NFCN,Y0,Y,IJOB,X,M1,M2,NM1,
      &          E1,LDE1,Z1,Z2,Z3,CONT,F1,F2,IP1,IPHES,SCAL,ERR,
-     &          FIRST,REJECT,FAC1,RPAR,IPAR)
+     &          FIRST,REJECT,FAC1,RPAR,IPAR, bPrint)
 C --- COMPUTATION OF HNEW
 C --- WE REQUIRE .2<=HNEW/H<=8.
       FAC=MIN(SAFE,CFAC/(NEWT+2*NIT))
@@ -996,16 +1050,20 @@ C --- WE REQUIRE .2<=HNEW/H<=8.
 C *** *** *** *** *** *** ***
 C  IS THE ERROR SMALL ENOUGH ?
 C *** *** *** *** *** *** ***
+      if (bPrint) print*, '  ERR=',ERR
       IF (ERR.LT.1.D0) THEN
-C --- STEP IS ACCEPTED  
+C --- STEP IS ACCEPTED 
          FIRST=.FALSE.
          NACCPT=NACCPT+1
          IF (PRED) THEN
 C       --- PREDICTIVE CONTROLLER OF GUSTAFSSON
             IF (NACCPT.GT.1) THEN
                FACGUS=(HACC/H)*(ERR**2/ERRACC)**0.25D0/SAFE
+               if (bPrint) print*, '  FACGUS=',FACGUS
                FACGUS=MAX(FACR,MIN(FACL,FACGUS))
+               if (bPrint) print*, '    --> =',FACGUS
                QUOT=MAX(QUOT,FACGUS)
+               if (bPrint) print*, '  QUOT=', QUOT
                HNEW=H/QUOT
             END IF
             HACC=H
@@ -1048,7 +1106,7 @@ C       --- PREDICTIVE CONTROLLER OF GUSTAFSSON
              IF (IRTRN.LT.0) GOTO 179
          END IF
          CALJAC=.FALSE.
-         IF (LAST) THEN
+         IF (LAST) THEN ! final time step has been performed
             H=HOPT
             IDID=1
             RETURN
@@ -1090,9 +1148,11 @@ C --- STEP IS REJECTED
 C --- UNEXPECTED STEP-REJECTION
   78  CONTINUE
       IF (IER.NE.0) THEN
+          IF (bPrint) print*, '  Singular problem'
           NSING=NSING+1
           IF (NSING.GE.5) GOTO 176
       END IF
+      IF (bPrint) print*, '  dt will be reduced'
       H=H*0.5D0 
       HHFAC=0.5D0
       REJECT=.TRUE.
@@ -1103,22 +1163,26 @@ C --- FAIL EXIT
  176  CONTINUE
       WRITE(6,979)X   
       WRITE(6,*) ' MATRIX IS REPEATEDLY SINGULAR, IER=',IER
+      IF (bPrint) print*, '  Matrix is repeatedly singular'
       IDID=-4
       RETURN
  177  CONTINUE
       WRITE(6,979)X   
       WRITE(6,*) ' STEP SIZE T0O SMALL, H=',H
+      IF (bPrint) print*, '  step size too small, H=',H
       IDID=-3
       RETURN
  178  CONTINUE
       WRITE(6,979)X   
       WRITE(6,*) ' MORE THAN NMAX =',NMAX,'STEPS ARE NEEDED' 
+      IF (bPrint) print*, '  maximum number of steps reached'
       IDID=-2
       RETURN
 C --- EXIT CAUSED BY SOLOUT
  179  CONTINUE
       WRITE(6,979)X
  979  FORMAT(' EXIT OF RADAU5 AT X=',E18.4) 
+      IF (bPrint) print*, '  Exit at X=',X
       IDID=2
       RETURN
       END

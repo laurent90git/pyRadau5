@@ -135,7 +135,7 @@ def radau5(tini, tend, yini, fun,
 
 
     def solout(nr, told, t, y, cont, lrc, n, rpar, ipar, irtrn):
-        if bPrint: print(f'solout called after step tn={told[0]} to tnp1={t[0]}')
+        #if bPrint: print(f'solout called after step tn={told[0]} to tnp1={t[0]}')
         tsol.append(t[0])
         y_np = np.ctypeslib.as_array(y, shape=(n[0],)).copy() # transform input into a Numpy array
         ysol.append(y_np)
@@ -271,7 +271,7 @@ def radau5(tini, tend, yini, fun,
              mljac, mujac,
              imas, mlmas, mumas,
              iwork, work,
-             iout, info)
+             iout, info, bPrint)
 
     ################
     ##  Finalise  ##

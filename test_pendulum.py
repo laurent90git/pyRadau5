@@ -149,17 +149,18 @@ if __name__=='__main__':
 
     ###### Parameters to play with
     chosen_index = 3 # The index of the DAE formulation
-    tf = 10.0        # final time (one oscillation is ~2s long)
+    tf = 5. #10.0        # final time (one oscillation is ~2s long)
     rtol=1e-6; atol=rtol # relative and absolute tolerances for time adaptation
+    first_step=1e-6
     # dt_max = np.inf
     # rtol=1e-3; atol=rtol # relative and absolute tolerances for time adaptation
-    bPrint=False # if True, additional printouts from Radau during the computation
-    bDebug=False # sutdy condition number of the iteration matrix
+    bPrint=True # if True, additional printouts from Radau during the computation
+    bDebug=False # study condition number of the iteration matrix
 
 
     ## Physical parameters for the pendulum
     theta_0=np.pi/2 # initial angle
-    theta_dot0=0. # initial angular velocity
+    theta_dot0=-1. # initial angular velocity
     r0=3.  # rod length
     m=1.   # mass
     g=9.81 # gravitational acceleration
@@ -178,8 +179,8 @@ if __name__=='__main__':
                         t_eval=None,
                         nmax_step = 100000,
                         max_step = tf,
-                        first_step=1e-6,
-                        max_ite_newton=6, bUseExtrapolatedGuess=None,
+                        first_step=first_step,
+                        max_ite_newton=6, bUseExtrapolatedGuess=True,
                         bUsePredictiveController=True, safetyFactor=None,
                         deadzone=None, step_evo_factor_bounds=None,
                         jacobianRecomputeFactor=None, newton_tol=None,
@@ -190,9 +191,9 @@ if __name__=='__main__':
         state='solved'
     else:
         state='failed'
-    print("Scipy DAE of index {} {}".format(chosen_index, state))
+    print("Fortran DAE of index {} {}".format(chosen_index, state))
     print("{} time steps ({} = {} accepted + {} rejected)".format(
-      sol.t.size, sol.nstep, sol.naccpt, sol.nrejct))
+      sol.t.size-1, sol.nstep, sol.naccpt, sol.nrejct))
     print("{} fev, {} jev, {} LUdec, {} linsolves".format(
           sol.nfev, sol.njev, sol.ndec, sol.nsol))
 
@@ -221,12 +222,13 @@ if __name__=='__main__':
                     rtol=rtol, atol=atol, jac=jac_dae, jac_sparsity=None,
                     method=RadauDAE,
                     first_step=1e-6, dense_output=True,
-                    mass_matrix=mass, bPrint=bPrint,
+                    mass_matrix=mass, bPrint=False,
                     max_newton_ite=6, min_factor=0.2, max_factor=10,
+                    factor_on_non_convergence = 0.5,
                     var_index=var_index,
                     # newton_tol=1e-4,
                     scale_residuals = True,
-                    scale_newton_norm = False,
+                    scale_newton_norm = True,
                     scale_error = True,
                     max_bad_ite=1,
                     bDebug=bDebug)
@@ -237,10 +239,10 @@ if __name__=='__main__':
         state='failed'
     print("\nScipy DAE of index {} {}".format(chosen_index, state))
     print("{} time steps ({} = {} accepted + {} rejected + {} failed)".format(
-      sol.t.size, sol.solver.nstep, sol.solver.naccpt, sol.solver.nrejct, sol.solver.nfailed))
+      sol.t.size-1, sol.solver.nstep, sol.solver.naccpt, sol.solver.nrejct, sol.solver.nfailed))
     print("{} fev, {} jev, {} LUdec, {} linsolves, {} linsolves for error estimation".format(
           sol.nfev, sol.njev, sol.nlu, sol.solver.nlusove, sol.solver.nlusolve_errorest))
- 
+
     x,y,vx,vy,lbda = sol.y
     T = lbda * np.sqrt(x**2+y**2)
     theta= np.arctan(x/y)
@@ -312,10 +314,10 @@ if __name__=='__main__':
           constraint = x*vx+y*vy #index 2
         if i==2:
           constraint = x**2 + y**2 - r0**2 #index 3
-        
+
         # ax[i].plot(t, constraint, marker=marker, linestyle=linestyle, label=name, color=color)
         ax[i].semilogy(t, np.abs(constraint), marker=marker, linestyle=linestyle, label=name, color=color)
-        
+
       ax[3].semilogy(t[:-1], np.diff(t), marker=marker, linestyle=linestyle, label=name, color=color)
     for i in range(4):
       ax[i].grid()

@@ -3,7 +3,7 @@ FC = gfortran
 LD = gcc
 
 CCFLAGS = -fPIC
-FCFLAGS = -fPIC -fno-underscoring
+FCFLAGS = -fPIC -fno-underscoring -ffixed-line-length-0
 LDFLAGS = -shared
 
 OBJS = dc_decsol.o  decsol.o radau5.o rock4.o integration_radau.o integration_rock.o
