@@ -150,7 +150,7 @@ if __name__=='__main__':
     ###### Parameters to play with
     chosen_index = 3 # The index of the DAE formulation
     tf = 5. #10.0        # final time (one oscillation is ~2s long)
-    rtol=1e-6; atol=rtol # relative and absolute tolerances for time adaptation
+    rtol=1e-3; atol=rtol # relative and absolute tolerances for time adaptation
     first_step=1e-6
     # dt_max = np.inf
     # rtol=1e-3; atol=rtol # relative and absolute tolerances for time adaptation
@@ -185,15 +185,16 @@ if __name__=='__main__':
                         deadzone=None, step_evo_factor_bounds=None,
                         jacobianRecomputeFactor=None, newton_tol=None,
                         mass_matrix=mass, var_index=var_index,
-                        bPrint=True, nMaxBadIte=1, bAlwaysApply2ndEstimate=True)
+                        bPrint=True, nMaxBadIte=0, bAlwaysApply2ndEstimate=True,
+                        bReport=True)
     sol=solfort
     if solfort.success:
         state='solved'
     else:
         state='failed'
     print("Fortran DAE of index {} {}".format(chosen_index, state))
-    print("{} time steps ({} = {} accepted + {} rejected)".format(
-      sol.t.size-1, sol.nstep, sol.naccpt, sol.nrejct))
+    print("{} time steps ({} = {} accepted + {} rejected + {} failed)".format(
+      sol.t.size-1, sol.nstep, sol.naccpt, sol.nrejct, sol.nfail))
     print("{} fev, {} jev, {} LUdec, {} linsolves".format(
           sol.nfev, sol.njev, sol.ndec, sol.nsol))
 
@@ -209,7 +210,40 @@ if __name__=='__main__':
                'theta':theta,
                'lbda': lbda,
                'T': T}
-
+    
+    #%% Plot report
+    print('codes = ', np.unique(sol.reports['code']))
+    
+    codes, names =  zip(*
+                    ((0, 'accepted'),
+                     (1, 'rejected'),
+                     (2, 'refactor_from_newton'),
+                     (3, 'update_from_newton'),
+                     (4, 'singular'),
+                     (5, 'badconvergence'),
+                     (-10, 'jacobian_update'),
+                     (-11, 'refactor'),
+                     ))
+    Idict = {}
+    for key, val in zip(names, codes):
+      Idict[key] = np.where(sol.reports["code"]==val)[0]
+    Idict['failed'] = np.where( np.logical_or(sol.reports["code"]==4, sol.reports["code"]==5))[0]
+    
+    plt.figure()
+    plt.plot(sol.t[:-1], np.diff(sol.t), label=r'$\Delta t$')
+    # plt.plot(sol.reports['t'][Idict['accepted']], sol.reports['dt'][Idict['accepted']], linestyle='--', label='dt2')    
+  
+    plt.plot(sol.reports['t'][Idict['refactor']],        sol.reports['dt'][Idict['refactor']], linestyle='', marker='o', color='tab:green', label='refactor', markersize=15, alpha=0.3)
+    plt.plot(sol.reports['t'][Idict['jacobian_update']], sol.reports['dt'][Idict['jacobian_update']], linestyle='', marker='o', color='tab:green', label='jacobian update', alpha=1)
+    plt.plot(sol.reports['t'][Idict['failed']],          sol.reports['dt'][Idict['failed']], linestyle='', marker='o', color='tab:red', label='failed')
+    plt.plot(sol.reports['t'][Idict['rejected']],        sol.reports['dt'][Idict['rejected']], linestyle='', marker='o', color='tab:purple', label='rejected')
+    # plt.yscale('log')
+    
+    plt.grid()
+    plt.legend()
+    plt.xlabel('t (s)')
+    plt.xlabel('dt (s)')
+    
     #%% Solve the DAE with Scipy's modified Radau
     import sys
     sys.path.append('/stck/lfrancoi/GIT/DAE-Scipy')

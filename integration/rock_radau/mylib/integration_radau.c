@@ -9,6 +9,8 @@ void radau5_integration(double tini, double tend, double first_step,
                         func_radau fcn, // interface to the Python time derivative function
                         func_mas_radau mas_fcn, // mass matrix evaluation function
                         func_solout_radau solout, // solution export function
+                        func_report_radau reportfun, // helper to report step status (failures, rejection...)
+                        int nReport, // (de)activate reporting
                         double rtol, double atol, // error tolerances (scalar only)
                         int mljac, int mujac, // Jacobian lower and upper bandwiths
                         int imas, int mlmas, int mumas, // Mass matrix lower and upper bandwiths
@@ -81,7 +83,7 @@ void radau5_integration(double tini, double tend, double first_step,
          &rtol, &atol, &itol,
          jac_radau, &ijac, &mljac, &mujac,
          mas_fcn, &imas, &mlmas, &mumas, var_index,
-         solout, &iout,
+         solout, reportfun, &nReport, &iout,
          work, &lwork, iwork, &liwork,
          &rpar, &ipar, &idid,
          &bPrint, &nMaxBadIte, &nAlwaysUse2ndErrorEstimate);
@@ -94,7 +96,8 @@ void radau5_integration(double tini, double tend, double first_step,
   info[4] = iwork[17];  
   info[5] = iwork[18];  
   info[6] = iwork[19];  
-  info[7] = idid;  
+  info[7] = iwork[20];  
+  info[8] = idid;  
 }
 
 void jac_radau(int *n, double *x, double *y, double *dfy, int *ldfy, double *rpar, double *ipar)

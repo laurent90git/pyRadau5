@@ -2,7 +2,7 @@
      &                  RTOL,ATOL,ITOL,
      &                  JAC ,IJAC,MLJAC,MUJAC,
      &                  MAS ,IMAS,MLMAS,MUMAS, var_index,
-     &                  SOLOUT,IOUT,
+     &                  SOLOUT,REPORTFUN,nReport,IOUT,
      &                  WORK,LWORK,IWORK,LIWORK,RPAR,IPAR,IDID,
      &                  nPrint, nMaxBadIte, nAlwaysUse2ndErrorEstimate
      &                  )
@@ -375,9 +375,10 @@ C *** *** *** *** *** *** *** *** *** *** *** *** ***
       IMPLICIT DOUBLE PRECISION (A-H,O-Z)
       DIMENSION Y(N),ATOL(*),RTOL(*),WORK(LWORK),IWORK(LIWORK)
       DIMENSION RPAR(*),IPAR(*)
-      LOGICAL IMPLCT,JBAND,ARRET,STARTN,PRED, bPrint, bChangeTolerances, bAlwaysUse2ndErrorEstimate
-      INTEGER nPrint, nMaxBadIte, var_index(N)
-      EXTERNAL FCN,JAC,MAS,SOLOUT !, REPORTFUN
+      LOGICAL IMPLCT,JBAND,ARRET,STARTN,PRED, bPrint, bChangeTolerances, bAlwaysUse2ndErrorEstimate, bReport
+      INTEGER nPrint, nMaxBadIte, var_index(N), nReport
+      INTEGER  NFCN, NJAC, NSTEP, NACCPT, NREJCT, NFAILED, NDEC, NSOL
+      EXTERNAL FCN,JAC,MAS,SOLOUT, REPORTFUN
       
       if (nPrint > 0) then
         bPrint = .true.
@@ -385,6 +386,12 @@ C *** *** *** *** *** *** *** *** *** *** *** *** ***
         bPrint = .false.
       endif
       bChangeTolerances = .false. ! do not cheat :)
+      
+      if (nReport > 0) then
+        bReport = .true.
+      else
+        bReport = .false.
+      endif
       
       if (nAlwaysUse2ndErrorEstimate>0) then
         bAlwaysUse2ndErrorEstimate = .true.
@@ -404,6 +411,7 @@ C *** *** *** *** *** *** ***
        NSTEP=0
        NACCPT=0
        NREJCT=0
+       NFAILED=0
        NDEC=0
        NSOL=0
        ARRET=.FALSE.
@@ -659,8 +667,9 @@ C -------- CALL TO CORE INTEGRATOR ------------
      &   WORK(IEZ3),WORK(IEY0),WORK(IESCAL),WORK(IEF1),WORK(IEF2),
      &   WORK(IEF3),WORK(IEJAC),WORK(IEE1),WORK(IEE2R),WORK(IEE2I),
      &   WORK(IEMAS),IWORK(IEIP1),IWORK(IEIP2),IWORK(IEIPH),
-     &   WORK(IECON),NFCN,NJAC,NSTEP,NACCPT,NREJCT,NDEC,NSOL,RPAR,IPAR,
-     &   bPrint, nMaxBadIte, bAlwaysUse2ndErrorEstimate, var_index)
+     &   WORK(IECON),NFCN,NJAC,NSTEP,NACCPT,NREJCT,NFAILED,NDEC,NSOL,RPAR,IPAR,
+     &   bPrint, nMaxBadIte, bAlwaysUse2ndErrorEstimate, var_index,
+     &   REPORTFUN, bReport)
       IWORK(14)=NFCN
       IWORK(15)=NJAC
       IWORK(16)=NSTEP
@@ -668,6 +677,7 @@ C -------- CALL TO CORE INTEGRATOR ------------
       IWORK(18)=NREJCT
       IWORK(19)=NDEC
       IWORK(20)=NSOL
+      IWORK(21)=NFAILED
 C -------- RESTORE TOLERANCES
       if (bChangeTolerances) then
           EXPM=1.0D0/EXPM
@@ -701,8 +711,9 @@ C     !&   NIND1,NIND2,NIND3,PRED,FACL,FACR,M1,M2,NM1,
      &   PRED,FACL,FACR,M1,M2,NM1,
      &   IMPLCT,BANDED,LDJAC,LDE1,LDMAS,Z1,Z2,Z3,
      &   Y0,SCAL,F1,F2,F3,FJAC,E1,E2R,E2I,FMAS,IP1,IP2,IPHES,
-     &   CONT,NFCN,NJAC,NSTEP,NACCPT,NREJCT,NDEC,NSOL,RPAR,IPAR,
-     &   bPrint, nMaxBadIte,bAlwaysUse2ndErrorEstimate, var_index)
+     &   CONT,NFCN,NJAC,NSTEP,NACCPT,NREJCT,NFAILED,NDEC,NSOL,RPAR,IPAR,
+     &   bPrint, nMaxBadIte,bAlwaysUse2ndErrorEstimate, var_index,
+     &   REPORTFUN, bReport)
 C ----------------------------------------------------------
 C     CORE INTEGRATOR FOR RADAU5
 C     PARAMETERS SAME AS IN RADAU5 WITH WORKSPACE ADDED 
@@ -717,12 +728,12 @@ C ----------------------------------------------------------
       INTEGER IP1(NM1),IP2(NM1),IPHES(NM1)
       COMMON /CONRA5/NN,NN2,NN3,NN4,XSOL,HSOL,C2M1,C1M1
       COMMON/LINAL/MLE,MUE,MBJAC,MBB,MDIAG,MDIFF,MBDIAG
-      LOGICAL REJECT,FIRST,IMPLCT,BANDED,CALJAC,STARTN,CALHES
+      LOGICAL REJECT,FIRST,IMPLCT,BANDED,CALJAC,STARTN,CALHES, bReport
       !LOGICAL INDEX1,INDEX2,INDEX3
       LOGICAL LAST, PRED, bHighIndex
-      EXTERNAL FCN
+      EXTERNAL FCN, REPORTFUN
       LOGICAL bPrint, bAlwaysUse2ndErrorEstimate
-      INTEGER nMaxBadIte, NBAD, var_index(N), var_exp(N)
+      INTEGER nMaxBadIte, NBAD, var_index(N), var_exp(N), NFAILED
                   
 C *** *** *** *** *** *** ***
 C  INITIALISATIONS
@@ -835,7 +846,8 @@ C *** *** *** *** *** *** ***
 C  COMPUTATION OF THE JACOBIAN
 C *** *** *** *** *** *** ***
       NJAC=NJAC+1
-      IF (bPrint) print*, 'Updating Jacobian'
+      IF (bPrint) print*, 'Updating Jacobian' 
+      if (bReport) CALL REPORTFUN(X,H,-10) ! update jacobian
       IF (IJAC.EQ.0) THEN
 C --- COMPUTE JACOBIAN MATRIX NUMERICALLY
          IF (BANDED) THEN
@@ -891,6 +903,7 @@ C --- COMPUTE THE MATRICES E1 AND E2 AND THEIR DECOMPOSITIONS
       ALPHN=ALPH/H
       BETAN=BETA/H
       IF (bPrint) print*, 'Decomposing matrices'
+      if (bReport) CALL REPORTFUN(X,H,-11) ! refactor jacobian
       CALL DECOMR(N,FJAC,LDJAC,FMAS,LDMAS,MLMAS,MUMAS,
      &            M1,M2,NM1,FAC1,E1,LDE1,IP1,IER,IJOB,CALHES,IPHES)
       IF (IER.NE.0) GOTO 78
@@ -968,6 +981,7 @@ C *** *** *** *** *** *** ***
             IF (bPrint) print*, '  iter', NEWT,'/',NIT
 
             IF (NEWT.GE.NIT) GOTO 78 ! Too many Newton iterations
+            !TODO: weird, why is there no correction of dt based on the number of iterations as in the case where convergence is deemed too slow ?
             
             ! COMPUTE THE RIGHT-HAND SIDE
             CONT(1:N)=Y(1:N)+Z1(1:N)
@@ -1035,10 +1049,17 @@ C *** *** *** *** *** *** ***
                              HHFAC=.8D0*QNEWT**(-1.0D0/(4.0D0+NIT-1-NEWT))
                              H=HHFAC*H
                              if (bPrint) print*, '    QNEWT=',QNEWT, ', HHFAC=',HHFAC, ', H=',H
+                             
                              REJECT=.TRUE.
                              LAST=.FALSE.
-                             IF (CALJAC) GOTO 20
-                             GOTO 10
+                             NFAILED=NFAILED+1
+                             IF (CALJAC) then ! Jacobian had already been udpated at current X --> only decrease dt and refactor
+                                if (bReport) CALL REPORTFUN(X,H,5) ! refactor jacobian
+                                GOTO 20 ! refactor jacobian
+                             else
+                                if (bReport) CALL REPORTFUN(X,H,5) ! update jacobian
+                                GOTO 10 ! update jacobian
+                             endif
                         endif
                     END IF
                 ELSE ! Newton step diverges
@@ -1093,6 +1114,7 @@ C *** *** *** *** *** *** ***
 C --- STEP IS ACCEPTED 
          FIRST=.FALSE.
          NACCPT=NACCPT+1
+         if (bReport) CALL REPORTFUN(X,H,0) ! step accepted
          IF (PRED) THEN
 C       --- PREDICTIVE CONTROLLER OF GUSTAFSSON
             IF (NACCPT.GT.1) THEN
@@ -1122,21 +1144,15 @@ C       --- PREDICTIVE CONTROLLER OF GUSTAFSSON
             CONT(I+N3)=CONT(I+N2)-ACONT3
          END DO
          IF (ITOL.EQ.0) THEN
-             DO I=1,N
-                SCAL(I)=ATOL(1)+RTOL(1)*ABS(Y(I))
-             END DO
+            SCAL(1:N)=ATOL(1)+RTOL(1)*ABS(Y(1:N))
          ELSE
-             DO I=1,N
-                SCAL(I)=ATOL(I)+RTOL(I)*ABS(Y(I))
-             END DO
+            SCAL(1:N)=ATOL(1:N)+RTOL(1:N)*ABS(Y(1:N))
          END IF
          IF (IOUT.NE.0) THEN
              NRSOL=NACCPT+1
              XSOL=X
              XOSOL=XOLD
-             DO I=1,N
-                CONT(I)=Y(I)
-             END DO
+             CONT(1:N)=Y(1:N)
              NSOLU=N
              HSOL=HOLD
              CALL SOLOUT(NRSOL,XOSOL,XSOL,Y,CONT,LRC,NSOLU,
@@ -1166,10 +1182,11 @@ C       --- PREDICTIVE CONTROLLER OF GUSTAFSSON
             H=HNEW 
          END IF
          HHFAC=H
-         IF (THETA.LE.THET) GOTO 20
-         GOTO 10
+         IF (THETA.LE.THET) GOTO 20 ! refactor jacobian
+         GOTO 10 !update jacobian
       ELSE
 C --- STEP IS REJECTED  
+         if (bReport) CALL REPORTFUN(X,H,1) ! step rejected
          REJECT=.TRUE.
          LAST=.FALSE.
          IF (FIRST) THEN
@@ -1179,24 +1196,29 @@ C --- STEP IS REJECTED
              HHFAC=HNEW/H
              H=HNEW
          END IF
-         IF (NACCPT.GE.1) NREJCT=NREJCT+1
-         IF (CALJAC) GOTO 20
-         GOTO 10
+         !IF (NACCPT.GE.1) NREJCT=NREJCT+1
+         NREJCT=NREJCT+1
+         IF (CALJAC) GOTO 20 ! refactor jacobian
+         GOTO 10 ! update jacobian
       END IF
 C --- UNEXPECTED STEP-REJECTION
   78  CONTINUE
       IF (IER.NE.0) THEN
           IF (bPrint) print*, '  Singular problem'
           NSING=NSING+1
+          if (bReport) CALL REPORTFUN(X,H,4) ! matrix is singular
           IF (NSING.GE.5) GOTO 176
+      ELSE
+          if (bReport) CALL REPORTFUN(X,H,5) ! Newton failed
       END IF
+      NFAILED=NFAILED+1
       IF (bPrint) print*, '  dt will be reduced'
       H=H*0.5D0 
       HHFAC=0.5D0
       REJECT=.TRUE.
       LAST=.FALSE.
-      IF (CALJAC) GOTO 20
-      GOTO 10
+      IF (CALJAC) GOTO 20 ! refactor jacobian
+      GOTO 10 ! updating jacobian
 C --- FAIL EXIT
  176  CONTINUE
       WRITE(6,979)X   

@@ -34,7 +34,8 @@ def radau5(tini, tend, y0, fun,
     max_ite_newton=None, bUseExtrapolatedGuess=None, bUsePredictiveController=None,
     jacobianRecomputeFactor=None, newton_tol=None, bTryToUseHessenberg=False,
     deadzone=None, step_evo_factor_bounds=None, safetyFactor=None,
-    bPrint=False, bDebug=False, nMaxBadIte=0, bAlwaysApply2ndEstimate=False):
+    bPrint=False, bDebug=False, nMaxBadIte=0, bAlwaysApply2ndEstimate=False,
+    bReport=False):
     """ TODO    """
 
     import os
@@ -123,7 +124,7 @@ def radau5(tini, tend, y0, fun,
 
           # for debug checks
           mass_np = np.ctypeslib.as_array(am, shape=(lmas[0], n[0])) # transform input into a Numpy array
-          reconstructed_mass_matrix = np.zeros((neq,neq))
+          # reconstructed_mass_matrix = np.zeros((neq,neq))
           if bDebug: print('mass_np=', mass_np)
         #TODO:check diagonals are equal
         #  for i in range(n[0]):
@@ -140,7 +141,18 @@ def radau5(tini, tend, y0, fun,
         y_np = np.ctypeslib.as_array(y, shape=(n[0],)).copy() # transform input into a Numpy array
         ysol.append(y_np)
         irtrn[0] = 1 # if <0, Radau5 will exit --> TODO: handle events with that ?
+    if bReport:
+        nReport=1
+        reports={"t":[],"dt":[],"code":[]}    
+    else:
+        nReport=0
+    def reportfun(t,dt,code):
+        print('Reporting',t[0],dt[0],code[0])
+        reports['t'].append(t[0])
+        reports['dt'].append(dt[0])
+        reports['code'].append(code[0])
 
+        
     fcn_type = ct.CFUNCTYPE(None, ct.POINTER(ct.c_int), ct.POINTER(ct.c_double), ct.POINTER(ct.c_double),
                             ct.POINTER(ct.c_double), ct.POINTER(ct.c_double), ct.POINTER(ct.c_int))
 
@@ -151,11 +163,12 @@ def radau5(tini, tend, y0, fun,
     solout_type = ct.CFUNCTYPE(None, ct.POINTER(ct.c_int), ct.POINTER(ct.c_double), ct.POINTER(ct.c_double),
                                ct.POINTER(ct.c_double), ct.POINTER(ct.c_double), ct.POINTER(ct.c_int),
                                ct.POINTER(ct.c_int), ct.POINTER(ct.c_double), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int))
-
+    report_fcn_type = ct.CFUNCTYPE(None, ct.POINTER(ct.c_double), ct.POINTER(ct.c_double), ct.POINTER(ct.c_int))
+    
     c_radau5 = c_integration.radau5_integration
     c_radau5.argtypes = [ct.c_double, ct.c_double, ct.c_double,
                          ct.c_int,  np.ctypeslib.ndpointer(dtype = np.float64), np.ctypeslib.ndpointer(dtype = np.float64),
-                         fcn_type, mas_fcn_type, solout_type,
+                         fcn_type, mas_fcn_type, solout_type, report_fcn_type, ct.c_int,
                          ct.c_double, ct.c_double,
                          ct.c_int, ct.c_int,
                          ct.c_int, ct.c_int, ct.c_int, np.ctypeslib.ndpointer(dtype = np.int32),
@@ -168,9 +181,10 @@ def radau5(tini, tend, y0, fun,
     callable_fcn = fcn_type(fcn)
     callable_mass_fcn = mas_fcn_type(mass_fcn)
     callable_solout = solout_type(solout)
+    callable_reportfun = report_fcn_type(reportfun)
 
     yn = np.zeros(neq)
-    info= np.zeros(8, dtype=np.int32)
+    info= np.zeros(20, dtype=np.int32)
 
     itol=0 # tolerances are specified as scalars
     assert np.isscalar(rtol) and np.isscalar(atol), "`rtol` and `atol` must be scalars"
@@ -185,8 +199,8 @@ def radau5(tini, tend, y0, fun,
 
     ### FILL IN PARAMETERS IWORK
     # to keep the same indices as in the Fortran code, the first component here is useless
-    iwork = np.zeros((21,), dtype=np.int32)
-    work  = np.zeros((21,), dtype=np.float64)
+    iwork = np.zeros((25,), dtype=np.int32)
+    work  = np.zeros((25,), dtype=np.float64)
 
     if (bDenseJacobian) and (imas==0) and bTryToUseHessenberg:
       # the Jacobian can be transformed to Hessenberg, speeding up computations for large systems with dense Jacobians
@@ -277,7 +291,7 @@ def radau5(tini, tend, y0, fun,
     work  = work[1:]
     c_radau5(tini, tend, first_step,
              neq, y0, yn,
-             callable_fcn, callable_mass_fcn, callable_solout,
+             callable_fcn, callable_mass_fcn, callable_solout, callable_reportfun, nReport,
              rtol, atol,
              mljac, mujac,
              imas, mlmas, mumas, var_index,
@@ -303,8 +317,9 @@ def radau5(tini, tend, y0, fun,
     out.nrejct = info[4]  # number of rejected steps
     out.ndec   = info[5]  # number of lu-decompositions
     out.nsol   = info[6]  # number of forward-backward substitutions
-
-    IDID = info[7] # exit code
+    out.nfail  = info[7]  # number of failed steps (Newton's fault)
+    IDID       = info[8] # exit code
+    
     out.success = (IDID > 0)
     if IDID== 1:  out.msg='COMPUTATION SUCCESSFUL'
     if IDID== 2:  out.msg='COMPUT. SUCCESSFUL (INTERRUPTED BY SOLOUT)'
@@ -313,6 +328,10 @@ def radau5(tini, tend, y0, fun,
     if IDID==-3:  out.msg='STEP SIZE BECOMES TOO SMALL'
     if IDID==-4:  out.msg='MATRIX IS REPEATEDLY SINGULAR'
 
+    if bReport:
+      for key in reports.keys():
+        reports[key] = np.array(reports[key])
+        out.reports = reports
     if bPrint:
       print(f'IDID={IDID}, msg={out.msg}')
     return out
