@@ -171,7 +171,7 @@ if __name__=='__main__':
     print(f'Solving the index {chosen_index} formulation')
 
     #%% Solve the DAE
-    solfort = integration.radau5(tini=0., tend=tf, yini=Xini,
+    solfort = integration.radau5(tini=0., tend=tf, y0=Xini,
                         fun=dae_fun,
                         mljac=n, mujac=n,
                         mlmas=0, mumas=0,
@@ -185,7 +185,7 @@ if __name__=='__main__':
                         deadzone=None, step_evo_factor_bounds=None,
                         jacobianRecomputeFactor=None, newton_tol=None,
                         mass_matrix=mass, var_index=var_index,
-                        bPrint=bPrint, nMaxBadIte=1, bAlwaysApply2ndEstimate=True)
+                        bPrint=True, nMaxBadIte=1, bAlwaysApply2ndEstimate=True)
     sol=solfort
     if solfort.success:
         state='solved'

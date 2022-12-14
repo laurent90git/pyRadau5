@@ -1,7 +1,7 @@
       SUBROUTINE RADAU5(N,FCN,X,Y,XEND,H,
      &                  RTOL,ATOL,ITOL,
      &                  JAC ,IJAC,MLJAC,MUJAC,
-     &                  MAS ,IMAS,MLMAS,MUMAS,
+     &                  MAS ,IMAS,MLMAS,MUMAS, var_index,
      &                  SOLOUT,IOUT,
      &                  WORK,LWORK,IWORK,LIWORK,RPAR,IPAR,IDID,
      &                  nPrint, nMaxBadIte, nAlwaysUse2ndErrorEstimate
@@ -376,8 +376,8 @@ C *** *** *** *** *** *** *** *** *** *** *** *** ***
       DIMENSION Y(N),ATOL(*),RTOL(*),WORK(LWORK),IWORK(LIWORK)
       DIMENSION RPAR(*),IPAR(*)
       LOGICAL IMPLCT,JBAND,ARRET,STARTN,PRED, bPrint, bChangeTolerances, bAlwaysUse2ndErrorEstimate
-      INTEGER nPrint, nMaxBadIte
-      EXTERNAL FCN,JAC,MAS,SOLOUT
+      INTEGER nPrint, nMaxBadIte, var_index(N)
+      EXTERNAL FCN,JAC,MAS,SOLOUT !, REPORTFUN
       
       if (nPrint > 0) then
         bPrint = .true.
@@ -472,14 +472,14 @@ C -------- STARTN  SWITCH FOR STARTING VALUES OF NEWTON ITERATIONS
          STARTN=.TRUE.
       END IF
 C -------- PARAMETER FOR DIFFERENTIAL-ALGEBRAIC COMPONENTS
-      NIND1=IWORK(5)
-      NIND2=IWORK(6)
-      NIND3=IWORK(7)
-      IF (NIND1.EQ.0) NIND1=N
-      IF (NIND1+NIND2+NIND3.NE.N) THEN
-       WRITE(6,*)' CURIOUS INPUT FOR IWORK(5,6,7)=',NIND1,NIND2,NIND3
-       ARRET=.TRUE.
-      END IF
+      !NIND1=IWORK(5)
+      !NIND2=IWORK(6)
+      !NIND3=IWORK(7)
+      !IF (NIND1.EQ.0) NIND1=N
+      !IF (NIND1+NIND2+NIND3.NE.N) THEN
+      ! WRITE(6,*)' CURIOUS INPUT FOR IWORK(5,6,7)=',NIND1,NIND2,NIND3
+      ! ARRET=.TRUE.
+      !END IF
 C -------- PRED   STEP SIZE CONTROL
       IF(IWORK(8).LE.1)THEN
          PRED=.TRUE.
@@ -596,8 +596,7 @@ C -- MASS MATRIX
           END IF
 C ------ BANDWITH OF "MAS" NOT SMALLER THAN BANDWITH OF "JAC"
           IF (MLMAS.GT.MLJAC.OR.MUMAS.GT.MUJAC) THEN
-             WRITE (6,*) 'BANDWITH OF "MAS" NOT SMALLER THAN BANDWITH OF
-     & "JAC"'
+             WRITE (6,*) 'BANDWITH OF "MAS" NOT SMALLER THAN BANDWITH OF "JAC"'
             ARRET=.TRUE.
           END IF
       ELSE
@@ -612,8 +611,7 @@ C ------ BANDWITH OF "MAS" NOT SMALLER THAN BANDWITH OF "JAC"
       LDMAS2=MAX(1,LDMAS)
 C ------ HESSENBERG OPTION ONLY FOR EXPLICIT EQU. WITH FULL JACOBIAN
       IF ((IMPLCT.OR.JBAND).AND.IJOB.EQ.7) THEN
-         WRITE(6,*)' HESSENBERG OPTION ONLY FOR EXPLICIT EQUATIONS WITH 
-     &FULL JACOBIAN'
+         WRITE(6,*)' HESSENBERG OPTION ONLY FOR EXPLICIT EQUATIONS WITH FULL JACOBIAN'
          ARRET=.TRUE.
       END IF
 C ------- PREPARE THE ENTRY-POINTS FOR THE ARRAYS IN WORK -----
@@ -656,13 +654,13 @@ C -------- CALL TO CORE INTEGRATOR ------------
       CALL RADCOR(N,FCN,X,Y,XEND,HMAX,H,RTOL,ATOL,ITOL,
      &   JAC,IJAC,MLJAC,MUJAC,MAS,MLMAS,MUMAS,SOLOUT,IOUT,IDID,
      &   NMAX,UROUND,SAFE,THET,FNEWT,QUOT1,QUOT2,NIT,IJOB,STARTN,
-     &   NIND1,NIND2,NIND3,PRED,FACL,FACR,M1,M2,NM1,
+     &   PRED,FACL,FACR,M1,M2,NM1,
      &   IMPLCT,JBAND,LDJAC,LDE1,LDMAS2,WORK(IEZ1),WORK(IEZ2),
      &   WORK(IEZ3),WORK(IEY0),WORK(IESCAL),WORK(IEF1),WORK(IEF2),
      &   WORK(IEF3),WORK(IEJAC),WORK(IEE1),WORK(IEE2R),WORK(IEE2I),
      &   WORK(IEMAS),IWORK(IEIP1),IWORK(IEIP2),IWORK(IEIPH),
      &   WORK(IECON),NFCN,NJAC,NSTEP,NACCPT,NREJCT,NDEC,NSOL,RPAR,IPAR,
-     &   bPrint, nMaxBadIte, bAlwaysUse2ndErrorEstimate)
+     &   bPrint, nMaxBadIte, bAlwaysUse2ndErrorEstimate, var_index)
       IWORK(14)=NFCN
       IWORK(15)=NJAC
       IWORK(16)=NSTEP
@@ -693,14 +691,18 @@ C     END OF SUBROUTINE RADAU5
 C
 C ***********************************************************
 C
+C     ! SUBROUTINE RADCOR(N,FCN,X,Y,XEND,HMAX,H,RTOL,ATOL,ITOL,
+C     !&   JAC,IJAC,MLJAC,MUJAC,MAS,MLMAS,MUMAS,SOLOUT,IOUT,IDID,
+C     !&   NMAX,UROUND,SAFE,THET,FNEWT,QUOT1,QUOT2,NIT,IJOB,STARTN,
+C     !&   NIND1,NIND2,NIND3,PRED,FACL,FACR,M1,M2,NM1,
       SUBROUTINE RADCOR(N,FCN,X,Y,XEND,HMAX,H,RTOL,ATOL,ITOL,
      &   JAC,IJAC,MLJAC,MUJAC,MAS,MLMAS,MUMAS,SOLOUT,IOUT,IDID,
      &   NMAX,UROUND,SAFE,THET,FNEWT,QUOT1,QUOT2,NIT,IJOB,STARTN,
-     &   NIND1,NIND2,NIND3,PRED,FACL,FACR,M1,M2,NM1,
+     &   PRED,FACL,FACR,M1,M2,NM1,
      &   IMPLCT,BANDED,LDJAC,LDE1,LDMAS,Z1,Z2,Z3,
      &   Y0,SCAL,F1,F2,F3,FJAC,E1,E2R,E2I,FMAS,IP1,IP2,IPHES,
      &   CONT,NFCN,NJAC,NSTEP,NACCPT,NREJCT,NDEC,NSOL,RPAR,IPAR,
-     &   bPrint, nMaxBadIte,bAlwaysUse2ndErrorEstimate)
+     &   bPrint, nMaxBadIte,bAlwaysUse2ndErrorEstimate, var_index)
 C ----------------------------------------------------------
 C     CORE INTEGRATOR FOR RADAU5
 C     PARAMETERS SAME AS IN RADAU5 WITH WORKSPACE ADDED 
@@ -716,11 +718,12 @@ C ----------------------------------------------------------
       COMMON /CONRA5/NN,NN2,NN3,NN4,XSOL,HSOL,C2M1,C1M1
       COMMON/LINAL/MLE,MUE,MBJAC,MBB,MDIAG,MDIFF,MBDIAG
       LOGICAL REJECT,FIRST,IMPLCT,BANDED,CALJAC,STARTN,CALHES
-      LOGICAL INDEX1,INDEX2,INDEX3,LAST,PRED
+      !LOGICAL INDEX1,INDEX2,INDEX3
+      LOGICAL LAST, PRED, bHighIndex
       EXTERNAL FCN
       LOGICAL bPrint, bAlwaysUse2ndErrorEstimate
-      INTEGER nMaxBadIte, NBAD
-            
+      INTEGER nMaxBadIte, NBAD, var_index(N), var_exp(N)
+                  
 C *** *** *** *** *** *** ***
 C  INITIALISATIONS
 C *** *** *** *** *** *** ***
@@ -731,9 +734,16 @@ C --------- DUPLIFY N FOR COMMON BLOCK CONT -----
       NN3=3*N 
       LRC=4*N
 C -------- CHECK THE INDEX OF THE PROBLEM ----- 
-      INDEX1=NIND1.NE.0
-      INDEX2=NIND2.NE.0
-      INDEX3=NIND3.NE.0
+      bHighIndex = ANY( var_index > 1)
+      if (bHighIndex) then
+        var_exp(1:N) = max( 0, var_index - 1 )
+        if (bPrint) print*, 'var_exp=', var_exp
+      else
+        var_exp(1:N) = 0
+      endif
+      !INDEX1=NIND1.NE.0
+      !INDEX2=NIND2.NE.0
+      !INDEX3=NIND3.NE.0
 C ------- COMPUTE MASS MATRIX FOR IMPLICIT CASE ----------
       IF (IMPLCT) CALL MAS(NM1,FMAS,LDMAS,RPAR,IPAR)
 C ---------- CONSTANTS ---------
@@ -812,13 +822,9 @@ C ---------- CONSTANTS ---------
       N2=2*N
       N3=3*N
       IF (ITOL.EQ.0) THEN
-          DO I=1,N
-             SCAL(I)=ATOL(1)+RTOL(1)*ABS(Y(I))
-          END DO
+        SCAL(1:N)=ATOL(1)+RTOL(1)*ABS(Y(1:N))
       ELSE
-          DO I=1,N
-             SCAL(I)=ATOL(I)+RTOL(I)*ABS(Y(I))
-          END DO
+        SCAL(1:N)=ATOL(1:N)+RTOL(1:N)*ABS(Y(1:N))
       END IF
       HHFAC=H
       CALL FCN(N,X,Y,Y0,RPAR,IPAR)
@@ -902,16 +908,19 @@ C --- COMPUTE THE MATRICES E1 AND E2 AND THEIR DECOMPOSITIONS
       IF (0.1D0*ABS(H).LE.ABS(X)*UROUND) GOTO 177
       
       ! Update scaling for algebraic variables
-      IF (INDEX2) THEN
-         DO I=NIND1+1,NIND1+NIND2
-            SCAL(I)=SCAL(I)/HHFAC
-         END DO
-      END IF
-      IF (INDEX3) THEN
-         DO I=NIND1+NIND2+1,NIND1+NIND2+NIND3
-            SCAL(I)=SCAL(I)/(HHFAC*HHFAC)
-         END DO
-      END IF
+      !IF (INDEX2) THEN
+      !   DO I=NIND1+1,NIND1+NIND2
+      !      SCAL(I)=SCAL(I)/HHFAC
+      !   END DO
+      !END IF
+      !IF (INDEX3) THEN
+      !   DO I=NIND1+NIND2+1,NIND1+NIND2+NIND3
+      !      SCAL(I)=SCAL(I)/(HHFAC*HHFAC)
+      !   END DO
+      !END IF
+      if (bHighIndex) then
+        SCAL(1:N) = SCAL(1:N) / (HHFAC ** var_exp)
+      endif
       if (bPrint) print*, 'HHFAC=',HHFAC
       if (bPrint) print*, 'SCAL=',SCAL
       XPH=X+H

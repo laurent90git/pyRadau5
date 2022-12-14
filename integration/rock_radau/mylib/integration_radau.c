@@ -1,10 +1,10 @@
 #include<stdio.h>
 
 #include "integration_radau.h"
-//void radau5_integration(double tini, double tend, int n, double *yini, double *y, func_radau fcn, func_mas_radau mas_fcn, func_solout_radau solout, double rtol, double atol, int mljac, int mujac, int imas, int mlmas, int mumas, int *iwork_in, double *work_in, int iout, int *info)
+//void radau5_integration(double tini, double tend, int n, double *y0, double *y, func_radau fcn, func_mas_radau mas_fcn, func_solout_radau solout, double rtol, double atol, int mljac, int mujac, int imas, int mlmas, int mumas, int *iwork_in, double *work_in, int iout, int *info)
 void radau5_integration(double tini, double tend, double first_step,
                         int n, // size of the system
-                        double *yini, // pointer to the initial solution vector
+                        double *y0, // pointer to the initial solution vector
                         double *y, //
                         func_radau fcn, // interface to the Python time derivative function
                         func_mas_radau mas_fcn, // mass matrix evaluation function
@@ -12,6 +12,7 @@ void radau5_integration(double tini, double tend, double first_step,
                         double rtol, double atol, // error tolerances (scalar only)
                         int mljac, int mujac, // Jacobian lower and upper bandwiths
                         int imas, int mlmas, int mumas, // Mass matrix lower and upper bandwiths
+                        int* var_index, // index (algebraic) of each component
                         int *iwork_in, // integer parameters
                         double *work_in, // decimal parameters
                         int iout,  // solution export mode
@@ -63,7 +64,7 @@ void radau5_integration(double tini, double tend, double first_step,
 
   int i;
   // initial solution
-  for (i=0; i<n; ++i) y[i] = yini[i];
+  for (i=0; i<n; ++i) y[i] = y0[i];
 
   for(i=0; i<20; i++)
   {
@@ -79,7 +80,7 @@ void radau5_integration(double tini, double tend, double first_step,
   radau5(&n, fcn, &t, y, &tend, &dt,
          &rtol, &atol, &itol,
          jac_radau, &ijac, &mljac, &mujac,
-         mas_fcn, &imas, &mlmas, &mumas,
+         mas_fcn, &imas, &mlmas, &mumas, var_index,
          solout, &iout,
          work, &lwork, iwork, &liwork,
          &rpar, &ipar, &idid,

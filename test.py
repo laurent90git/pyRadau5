@@ -57,7 +57,7 @@ else: # test with dense mass matrix
     mlmas=mumas=None
 
 if 1:
-    out = integration.radau5(tini=0., tend=tf, yini=y0,
+    out = integration.radau5(tini=0., tend=tf, y0=y0,
                             fun=heat_modelfun,
                             mljac=n, mujac=n,
                             mlmas=mlmas, mumas=mlmas,
@@ -69,7 +69,8 @@ if 1:
                             bUsePredictiveController=None, safetyFactor=None,
                             deadzone=None, step_evo_factor_bounds=None,
                             jacobianRecomputeFactor=None, newton_tol=None,
-                            mass_matrix=mass_matrix, var_index=None)
+                            mass_matrix=mass_matrix, var_index=None,
+                            bPrint=True)
 
     print('nfev={}, njev={}, nlu={}, linsolve={}'.format(out.nfev, out.njev, out.ndec, out.nsol))
 else:

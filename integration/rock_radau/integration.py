@@ -26,7 +26,7 @@ class radau_result:
 #        self.nsol = nsol
 
 #############################################################################
-def radau5(tini, tend, yini, fun,
+def radau5(tini, tend, y0, fun,
     mujac, mljac,
     mass_matrix=None, mlmas=None, mumas=None, var_index=None,
     rtol=1e-4, atol=1e-4, t_eval=None,
@@ -43,7 +43,7 @@ def radau5(tini, tend, yini, fun,
     sPath = os.path.join(current_dir, subpath)
     c_integration = ct.CDLL(sPath)
 
-    neq = yini.size # number of components
+    neq = y0.size # number of components
     tsol=[]
     ysol=[]
 
@@ -158,7 +158,7 @@ def radau5(tini, tend, yini, fun,
                          fcn_type, mas_fcn_type, solout_type,
                          ct.c_double, ct.c_double,
                          ct.c_int, ct.c_int,
-                         ct.c_int, ct.c_int, ct.c_int,
+                         ct.c_int, ct.c_int, ct.c_int, np.ctypeslib.ndpointer(dtype = np.int32),
                          np.ctypeslib.ndpointer(dtype = np.int32), np.ctypeslib.ndpointer(dtype = np.float64),
                          ct.c_int, np.ctypeslib.ndpointer(dtype = np.int32),
                          ct.c_int, ct.c_int, ct.c_int]
@@ -206,16 +206,22 @@ def radau5(tini, tend, yini, fun,
     # TODO: Radau5 requires that the variables be sorted by differentiation index for DAEs
     if imas==1:
       if var_index is not None: # DAE system of index>1 (index 1 does not need extra treatments)
-        n_index0 = np.count_nonzero(var_index == 0)
-        n_index1 = np.count_nonzero(var_index == 1)
-        n_index2 = np.count_nonzero(var_index == 2)
-        n_index3 = np.count_nonzero(var_index == 3)
-        assert n_index0 + n_index1 + n_index2 + n_index3 == neq, "Are some variables of index higher than 3 ?"
-        assert np.all(np.diff(var_index)>=0), 'components mus be sorted by index'
-        iwork[5] = n_index0 + n_index1 # number of index-0 and index-1 variables
-        iwork[6] = n_index2
-        iwork[7] = n_index3
-
+       # n_index0 = np.count_nonzero(var_index == 0)
+       # n_index1 = np.count_nonzero(var_index == 1)
+       # n_index2 = np.count_nonzero(var_index == 2)
+       # n_index3 = np.count_nonzero(var_index == 3)
+       # assert n_index0 + n_index1 + n_index2 + n_index3 == neq, "Are some variables of index higher than 3 ?"
+       # assert np.all(np.diff(var_index)>=0), 'components mus be sorted by index'
+       # iwork[5] = n_index0 + n_index1 # number of index-0 and index-1 variables
+       # iwork[6] = n_index2
+       # iwork[7] = n_index3
+        pass
+        assert  var_index.size == y0.size
+        if var_index.dtype != np.int32:
+            var_index = var_index.astype(np.int32)#, casting='safe')
+      else:
+         var_index = np.zeros((y0.size,), dtype=np.int32)
+    
     if bUsePredictiveController is not None:
       if bUsePredictiveController:
         iwork[8] = 1 # advanced time step controller of Gustafson
@@ -270,11 +276,11 @@ def radau5(tini, tend, yini, fun,
     iwork = iwork[1:]
     work  = work[1:]
     c_radau5(tini, tend, first_step,
-             neq, yini, yn,
+             neq, y0, yn,
              callable_fcn, callable_mass_fcn, callable_solout,
              rtol, atol,
              mljac, mujac,
-             imas, mlmas, mumas,
+             imas, mlmas, mumas, var_index,
              iwork, work,
              iout, info,
              bPrint, nMaxBadIte, nAlwaysUse2ndErrorEstimate)
