@@ -150,7 +150,7 @@ if __name__=='__main__':
     ###### Parameters to play with
     chosen_index = 3 # The index of the DAE formulation
     tf = 5. #10.0        # final time (one oscillation is ~2s long)
-    rtol=1e-3; atol=rtol # relative and absolute tolerances for time adaptation
+    rtol=1e-7; atol=rtol # relative and absolute tolerances for time adaptation
     first_step=1e-6
     # dt_max = np.inf
     # rtol=1e-3; atol=rtol # relative and absolute tolerances for time adaptation
@@ -180,12 +180,12 @@ if __name__=='__main__':
                         nmax_step = 100000,
                         max_step = tf,
                         first_step=min(tf, first_step),
-                        max_ite_newton=6, bUseExtrapolatedGuess=True,
+                        max_ite_newton=5, bUseExtrapolatedGuess=True,
                         bUsePredictiveController=True, safetyFactor=None,
                         deadzone=None, step_evo_factor_bounds=None,
                         jacobianRecomputeFactor=None, newton_tol=None,
                         mass_matrix=mass, var_index=var_index,
-                        bPrint=True, nMaxBadIte=0, bAlwaysApply2ndEstimate=True,
+                        bPrint=True, nMaxBadIte=2, bAlwaysApply2ndEstimate=True,
                         bReport=True)
     sol=solfort
     if solfort.success:
@@ -242,7 +242,7 @@ if __name__=='__main__':
     plt.grid()
     plt.legend()
     plt.xlabel('t (s)')
-    plt.xlabel('dt (s)')
+    plt.ylabel('dt (s)')
     
     #%% Solve the DAE with Scipy's modified Radau
     import sys

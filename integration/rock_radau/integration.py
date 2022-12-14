@@ -146,8 +146,9 @@ def radau5(tini, tend, y0, fun,
         reports={"t":[],"dt":[],"code":[]}    
     else:
         nReport=0
+        reports=None
     def reportfun(t,dt,code):
-        print('Reporting',t[0],dt[0],code[0])
+        # print('Reporting',t[0],dt[0],code[0])
         reports['t'].append(t[0])
         reports['dt'].append(dt[0])
         reports['code'].append(code[0])
