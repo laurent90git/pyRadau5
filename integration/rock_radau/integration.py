@@ -34,7 +34,7 @@ def radau5(tini, tend, yini, fun,
     max_ite_newton=None, bUseExtrapolatedGuess=None, bUsePredictiveController=None,
     jacobianRecomputeFactor=None, newton_tol=None, bTryToUseHessenberg=False,
     deadzone=None, step_evo_factor_bounds=None, safetyFactor=None,
-    bPrint=False, bDebug=False):
+    bPrint=False, bDebug=False, nMaxBadIte=0, bAlwaysApply2ndEstimate=False):
     """ TODO    """
 
     import os
@@ -46,7 +46,7 @@ def radau5(tini, tend, yini, fun,
     neq = yini.size # number of components
     tsol=[]
     ysol=[]
-    
+
 
     def fcn(n, t, y, ydot, rpar, ipar):
         y_np = np.ctypeslib.as_array(y, shape=(n[0],)) # transform input into a Numpy array
@@ -160,8 +160,8 @@ def radau5(tini, tend, yini, fun,
                          ct.c_int, ct.c_int,
                          ct.c_int, ct.c_int, ct.c_int,
                          np.ctypeslib.ndpointer(dtype = np.int32), np.ctypeslib.ndpointer(dtype = np.float64),
-                         ct.c_int, np.ctypeslib.ndpointer(dtype = np.int32)]
-
+                         ct.c_int, np.ctypeslib.ndpointer(dtype = np.int32),
+                         ct.c_int, ct.c_int, ct.c_int]
     c_radau5.restype = None
 
     # create callabel interfaces to the Python functions (time derivatives, jacobian, solution export, mass matrix)
@@ -181,7 +181,7 @@ def radau5(tini, tend, yini, fun,
     mljac=neq
     bDenseJacobian = (mujac == neq) and (mljac == neq) # Jacobian is dense ?
 
-    
+
 
     ### FILL IN PARAMETERS IWORK
     # to keep the same indices as in the Fortran code, the first component here is useless
@@ -191,7 +191,7 @@ def radau5(tini, tend, yini, fun,
     if (bDenseJacobian) and (imas==0) and bTryToUseHessenberg:
       # the Jacobian can be transformed to Hessenberg, speeding up computations for large systems with dense Jacobians
       iwork[1] = 1
-    else: 
+    else:
       iwork[1] = 0
 
     iwork[2] = nmax_step
@@ -202,7 +202,7 @@ def radau5(tini, tend, yini, fun,
     if bUseExtrapolatedGuess is not None:
       if not bUseExtrapolatedGuess:
         iwork[4] = 1
-    
+
     # TODO: Radau5 requires that the variables be sorted by differentiation index for DAEs
     if imas==1:
       if var_index is not None: # DAE system of index>1 (index 1 does not need extra treatments)
@@ -215,13 +215,13 @@ def radau5(tini, tend, yini, fun,
         iwork[5] = n_index0 + n_index1 # number of index-0 and index-1 variables
         iwork[6] = n_index2
         iwork[7] = n_index3
-    
+
     if bUsePredictiveController is not None:
       if bUsePredictiveController:
         iwork[8] = 1 # advanced time step controller of Gustafson
       else:
         iwork[8] = 2 # classical time step controller
-      
+
     # for second-order systems #TODO: enable that !!!
     iwork[9]  = 0
     iwork[10] = 0
@@ -234,7 +234,7 @@ def radau5(tini, tend, yini, fun,
       work[3] = jacobianRecomputeFactor
     if newton_tol is not None:
       work[3] = newton_tol
-    if deadzone is not None: # deadzone for time step 
+    if deadzone is not None: # deadzone for time step
       work[5] = deadzone[0]
       work[6] = deadzone[1]
 
@@ -248,6 +248,11 @@ def radau5(tini, tend, yini, fun,
     if bDebug:
       print('iwork = ', iwork)
       print('work = ', work)
+      
+    if bAlwaysApply2ndEstimate:
+        nAlwaysUse2ndErrorEstimate = 1
+    else:
+        nAlwaysUse2ndErrorEstimate = 0
 
     if t_eval is None:
       iout = 1 # all time steps will be exported
@@ -271,7 +276,8 @@ def radau5(tini, tend, yini, fun,
              mljac, mujac,
              imas, mlmas, mumas,
              iwork, work,
-             iout, info, bPrint)
+             iout, info,
+             bPrint, nMaxBadIte, nAlwaysUse2ndErrorEstimate)
 
     ################
     ##  Finalise  ##
@@ -291,7 +297,7 @@ def radau5(tini, tend, yini, fun,
     out.nrejct = info[4]  # number of rejected steps
     out.ndec   = info[5]  # number of lu-decompositions
     out.nsol   = info[6]  # number of forward-backward substitutions
-    
+
     IDID = info[7] # exit code
     out.success = (IDID > 0)
     if IDID== 1:  out.msg='COMPUTATION SUCCESSFUL'
@@ -300,7 +306,7 @@ def radau5(tini, tend, yini, fun,
     if IDID==-2:  out.msg='LARGER NMAX IS NEEDED'
     if IDID==-3:  out.msg='STEP SIZE BECOMES TOO SMALL'
     if IDID==-4:  out.msg='MATRIX IS REPEATEDLY SINGULAR'
-     
+
     if bPrint:
       print(f'IDID={IDID}, msg={out.msg}')
     return out

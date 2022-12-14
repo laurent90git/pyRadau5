@@ -154,7 +154,7 @@ if __name__=='__main__':
     first_step=1e-6
     # dt_max = np.inf
     # rtol=1e-3; atol=rtol # relative and absolute tolerances for time adaptation
-    bPrint=True # if True, additional printouts from Radau during the computation
+    bPrint=False # if True, additional printouts from Radau during the computation
     bDebug=False # study condition number of the iteration matrix
 
 
@@ -179,13 +179,13 @@ if __name__=='__main__':
                         t_eval=None,
                         nmax_step = 100000,
                         max_step = tf,
-                        first_step=first_step,
+                        first_step=min(tf, first_step),
                         max_ite_newton=6, bUseExtrapolatedGuess=True,
                         bUsePredictiveController=True, safetyFactor=None,
                         deadzone=None, step_evo_factor_bounds=None,
                         jacobianRecomputeFactor=None, newton_tol=None,
                         mass_matrix=mass, var_index=var_index,
-                        bPrint=False)
+                        bPrint=bPrint, nMaxBadIte=1, bAlwaysApply2ndEstimate=True)
     sol=solfort
     if solfort.success:
         state='solved'
@@ -210,9 +210,6 @@ if __name__=='__main__':
                'lbda': lbda,
                'T': T}
 
-
-
-
     #%% Solve the DAE with Scipy's modified Radau
     import sys
     sys.path.append('/stck/lfrancoi/GIT/DAE-Scipy')
@@ -221,8 +218,8 @@ if __name__=='__main__':
     solpy = solve_ivp(fun=dae_fun, t_span=(0., tf), y0=Xini, max_step=tf,
                     rtol=rtol, atol=atol, jac=jac_dae, jac_sparsity=None,
                     method=RadauDAE,
-                    first_step=1e-6, dense_output=True,
-                    mass_matrix=mass, bPrint=False,
+                    first_step=min(tf, first_step), dense_output=True,
+                    mass_matrix=mass, bPrint=bPrint,
                     max_newton_ite=6, min_factor=0.2, max_factor=10,
                     factor_on_non_convergence = 0.5,
                     var_index=var_index,
@@ -230,6 +227,8 @@ if __name__=='__main__':
                     scale_residuals = True,
                     scale_newton_norm = True,
                     scale_error = True,
+                    zero_algebraic_error=False,
+                    bAlwaysApply2ndEstimate = True,
                     max_bad_ite=1,
                     bDebug=bDebug)
     sol = solpy
@@ -254,6 +253,7 @@ if __name__=='__main__':
                'theta':theta,
                'lbda': lbda,
                'T': T}
+
     #%% Compute true solution (ODE on the angle in polar coordinates)
     def fun_ode(t,X):
       theta=X[0]; theta_dot = X[1]

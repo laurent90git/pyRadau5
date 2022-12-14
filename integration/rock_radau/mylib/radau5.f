@@ -4,7 +4,8 @@
      &                  MAS ,IMAS,MLMAS,MUMAS,
      &                  SOLOUT,IOUT,
      &                  WORK,LWORK,IWORK,LIWORK,RPAR,IPAR,IDID,
-     &                  bPrintInteger)
+     &                  nPrint, nMaxBadIte, nAlwaysUse2ndErrorEstimate
+     &                  )
 C ----------------------------------------------------------
 C     NUMERICAL SOLUTION OF A STIFF (OR DIFFERENTIAL ALGEBRAIC)
 C     SYSTEM OF FIRST 0RDER ORDINARY DIFFERENTIAL EQUATIONS
@@ -374,17 +375,27 @@ C *** *** *** *** *** *** *** *** *** *** *** *** ***
       IMPLICIT DOUBLE PRECISION (A-H,O-Z)
       DIMENSION Y(N),ATOL(*),RTOL(*),WORK(LWORK),IWORK(LIWORK)
       DIMENSION RPAR(*),IPAR(*)
-      LOGICAL IMPLCT,JBAND,ARRET,STARTN,PRED, bPrint, bChangeTolerances
-      INTEGER bPrintInteger
+      LOGICAL IMPLCT,JBAND,ARRET,STARTN,PRED, bPrint, bChangeTolerances, bAlwaysUse2ndErrorEstimate
+      INTEGER nPrint, nMaxBadIte
       EXTERNAL FCN,JAC,MAS,SOLOUT
       
-      print*, 'bPrintInteger=', bPrintInteger
-      if (bPrintInteger > 0) then
+      if (nPrint > 0) then
         bPrint = .true.
       else
         bPrint = .false.
       endif
       bChangeTolerances = .false. ! do not cheat :)
+      
+      if (nAlwaysUse2ndErrorEstimate>0) then
+        bAlwaysUse2ndErrorEstimate = .true.
+      else
+        bAlwaysUse2ndErrorEstimate = .false.
+      endif
+      
+      if (bPrint) then
+          print*, 'nPrintInteger=', nPrintInteger
+          print*, 'nMaxBadIte=', nMaxBadIte
+      endif
 C *** *** *** *** *** *** ***
 C        SETTING THE PARAMETERS 
 C *** *** *** *** *** *** ***
@@ -650,7 +661,8 @@ C -------- CALL TO CORE INTEGRATOR ------------
      &   WORK(IEZ3),WORK(IEY0),WORK(IESCAL),WORK(IEF1),WORK(IEF2),
      &   WORK(IEF3),WORK(IEJAC),WORK(IEE1),WORK(IEE2R),WORK(IEE2I),
      &   WORK(IEMAS),IWORK(IEIP1),IWORK(IEIP2),IWORK(IEIPH),
-     &   WORK(IECON),NFCN,NJAC,NSTEP,NACCPT,NREJCT,NDEC,NSOL,RPAR,IPAR, bPrint)
+     &   WORK(IECON),NFCN,NJAC,NSTEP,NACCPT,NREJCT,NDEC,NSOL,RPAR,IPAR,
+     &   bPrint, nMaxBadIte, bAlwaysUse2ndErrorEstimate)
       IWORK(14)=NFCN
       IWORK(15)=NJAC
       IWORK(16)=NSTEP
@@ -687,7 +699,8 @@ C
      &   NIND1,NIND2,NIND3,PRED,FACL,FACR,M1,M2,NM1,
      &   IMPLCT,BANDED,LDJAC,LDE1,LDMAS,Z1,Z2,Z3,
      &   Y0,SCAL,F1,F2,F3,FJAC,E1,E2R,E2I,FMAS,IP1,IP2,IPHES,
-     &   CONT,NFCN,NJAC,NSTEP,NACCPT,NREJCT,NDEC,NSOL,RPAR,IPAR,bPrint)
+     &   CONT,NFCN,NJAC,NSTEP,NACCPT,NREJCT,NDEC,NSOL,RPAR,IPAR,
+     &   bPrint, nMaxBadIte,bAlwaysUse2ndErrorEstimate)
 C ----------------------------------------------------------
 C     CORE INTEGRATOR FOR RADAU5
 C     PARAMETERS SAME AS IN RADAU5 WITH WORKSPACE ADDED 
@@ -705,7 +718,8 @@ C ----------------------------------------------------------
       LOGICAL REJECT,FIRST,IMPLCT,BANDED,CALJAC,STARTN,CALHES
       LOGICAL INDEX1,INDEX2,INDEX3,LAST,PRED
       EXTERNAL FCN
-      LOGICAL bPrint
+      LOGICAL bPrint, bAlwaysUse2ndErrorEstimate
+      INTEGER nMaxBadIte, NBAD
             
 C *** *** *** *** *** *** ***
 C  INITIALISATIONS
@@ -938,6 +952,7 @@ C *** *** *** *** *** *** ***
 C  LOOP FOR THE SIMPLIFIED NEWTON ITERATION
 C *** *** *** *** *** *** ***
             NEWT=0 ! iteration counter
+            NBAD=0 ! number of iterations with rate > 1 during the current Newton loop
             FACCON=MAX(FACCON,UROUND)**0.8D0
             THETA=ABS(THET)
   40        CONTINUE
@@ -946,19 +961,13 @@ C *** *** *** *** *** *** ***
             IF (NEWT.GE.NIT) GOTO 78 ! Too many Newton iterations
             
             ! COMPUTE THE RIGHT-HAND SIDE
-            DO I=1,N
-               CONT(I)=Y(I)+Z1(I)
-            END DO
-            CALL FCN(N,X+C1*H,CONT,Z1,RPAR,IPAR)
-            !Z1 will be equal to FCN(t,y+z1), i.e. RHS evaluated at
-            !current first quadrature point iterate
-            DO I=1,N
-               CONT(I)=Y(I)+Z2(I)
-            END DO
+            CONT(1:N)=Y(1:N)+Z1(1:N)
+            CALL FCN(N,X+C1*H,CONT,Z1,RPAR,IPAR)  !Z1 will be equal to FCN(t,y+z1), i.e. RHS evaluated at current first quadrature point iterate
+            
+            CONT(1:N)=Y(1:N)+Z2(1:N)
             CALL FCN(N,X+C2*H,CONT,Z2,RPAR,IPAR)
-            DO I=1,N
-               CONT(I)=Y(I)+Z3(I)
-            END DO
+            
+            CONT(1:N)=Y(1:N)+Z3(1:N)
             CALL FCN(N,XPH,CONT,Z3,RPAR,IPAR)
             NFCN=NFCN+3
             
@@ -971,9 +980,9 @@ C *** *** *** *** *** *** ***
               Z2(I)=TI21*A1+TI22*A2+TI23*A3
               Z3(I)=TI31*A1+TI32*A2+TI33*A3
             END DO
-        CALL SLVRAD(N,FJAC,LDJAC,MLJAC,MUJAC,FMAS,LDMAS,MLMAS,MUMAS,
-     &          M1,M2,NM1,FAC1,ALPHN,BETAN,E1,E2R,E2I,LDE1,Z1,Z2,Z3,
-     &          F1,F2,F3,CONT,IP1,IP2,IPHES,IER,IJOB)
+            CALL SLVRAD(N,FJAC,LDJAC,MLJAC,MUJAC,FMAS,LDMAS,MLMAS,MUMAS,
+     &               M1,M2,NM1,FAC1,ALPHN,BETAN,E1,E2R,E2I,LDE1,Z1,Z2,Z3,
+     &               F1,F2,F3,CONT,IP1,IP2,IPHES,IER,IJOB)
             NSOL=NSOL+1
             NEWT=NEWT+1
             ! Compute norm of Newton increment
@@ -1005,43 +1014,63 @@ C *** *** *** *** *** *** ***
                     endif
 
                     IF (DYTH.GE.1.0D0) THEN ! Newton will likely not converge to the desired precision within NIT iterations
-                         if (bPrint) print*, '    Newton will not converge to the desired precision'
-                         QNEWT=DMAX1(1.0D-4,DMIN1(20.0D0,DYTH))
-                         HHFAC=.8D0*QNEWT**(-1.0D0/(4.0D0+NIT-1-NEWT))
-                         H=HHFAC*H
-                         if (bPrint) print*, '    QNEWT=',QNEWT, ', HHFAC=',HHFAC, ', H=',H
-                         REJECT=.TRUE.
-                         LAST=.FALSE.
-                         IF (CALJAC) GOTO 20
-                         GOTO 10
+                         if (NBAD<nMaxBadIte) then
+                            IF (bPrint) print*, '    Bad iteration, estimated final error too large'
+                            NBAD = NBAD + 1
+                         else
+                             if (bPrint) then
+                                if (nMaxBadIte>0) print*, '    Too many bad iterations'
+                                print*, '    Newton will not converge to the desired precision'
+                             endif                                
+                             QNEWT=DMAX1(1.0D-4,DMIN1(20.0D0,DYTH))
+                             HHFAC=.8D0*QNEWT**(-1.0D0/(4.0D0+NIT-1-NEWT))
+                             H=HHFAC*H
+                             if (bPrint) print*, '    QNEWT=',QNEWT, ', HHFAC=',HHFAC, ', H=',H
+                             REJECT=.TRUE.
+                             LAST=.FALSE.
+                             IF (CALJAC) GOTO 20
+                             GOTO 10
+                        endif
                     END IF
                 ELSE ! Newton step diverges
-                    IF (bPrint) print*, '    Newton diverges'
-                    GOTO 78
+                    IF (THETA>10) then
+                        IF (bPrint) print*, '    Newton diverges'
+                        GOTO 78
+                    ELSE
+                        if (NBAD<nMaxBadIte) then
+                            IF (bPrint) print*, '    Bad iteration, rate=',THETA,' > 1'
+                            NBAD = NBAD + 1
+                        ELSE
+                            IF (bPrint) print*, '    Too many bad iterations'
+                            GOTO 78
+                        ENDIF
+                    ENDIF
                 END IF
             END IF
             DYNOLD=MAX(DYNO,UROUND)
-            DO I=1,N
-               F1I=F1(I)+Z1(I)
-               F2I=F2(I)+Z2(I)
-               F3I=F3(I)+Z3(I)
-               F1(I)=F1I
-               F2(I)=F2I
-               F3(I)=F3I
-               Z1(I)=T11*F1I+T12*F2I+T13*F3I
-               Z2(I)=T21*F1I+T22*F2I+T23*F3I
-               Z3(I)=T31*F1I+    F2I
-            END DO
-            IF (FACCON*DYNO.GT.FNEWT) THEN
-                ! Perform another Newton step
+            
+            ! Apply increment
+            IF (bPrint) print*, '    Applying increment'
+            F1(1:N) = F1(1:N) + Z1(1:N)
+            F2(1:N) = F2(1:N) + Z2(1:N)
+            F3(1:N) = F3(1:N) + Z3(1:N)
+            
+            Z1(1:N) = T11*F1(1:N) + T12*F2(1:N) + T13*F3(1:N)
+            Z2(1:N) = T21*F1(1:N) + T22*F2(1:N) + T23*F3(1:N)
+            Z3(1:N) = T31*F1(1:N) +     F2(1:N)
+            
+            IF (FACCON*DYNO > FNEWT) THEN ! Not yet converged --> perform another Newton step
                 GOTO 40
             ENDIF
       IF (bPrint) print*, '  Newton converged'
-      ! ERROR ESTIMATION
+      
+      !************************!
+      !*** ERROR ESTIMATION ***!
+      !************************!
       CALL ESTRAD (N,FJAC,LDJAC,MLJAC,MUJAC,FMAS,LDMAS,MLMAS,MUMAS,
      &          H,DD1,DD2,DD3,FCN,NFCN,Y0,Y,IJOB,X,M1,M2,NM1,
      &          E1,LDE1,Z1,Z2,Z3,CONT,F1,F2,IP1,IPHES,SCAL,ERR,
-     &          FIRST,REJECT,FAC1,RPAR,IPAR, bPrint)
+     &          FIRST,REJECT,FAC1,RPAR,IPAR, bPrint, bAlwaysUse2ndErrorEstimate)
 C --- COMPUTATION OF HNEW
 C --- WE REQUIRE .2<=HNEW/H<=8.
       FAC=MIN(SAFE,CFAC/(NEWT+2*NIT))

@@ -1273,12 +1273,13 @@ C
       SUBROUTINE ESTRAD(N,FJAC,LDJAC,MLJAC,MUJAC,FMAS,LDMAS,MLMAS,MUMAS,
      &          H,DD1,DD2,DD3,FCN,NFCN,Y0,Y,IJOB,X,M1,M2,NM1,
      &          E1,LDE1,Z1,Z2,Z3,CONT,F1,F2,IP1,IPHES,SCAL,ERR,
-     &          FIRST,REJECT,FAC1,RPAR,IPAR, bPrint)
+     &          FIRST,REJECT,FAC1,RPAR,IPAR,
+     &          bPrint, bAlwaysUse2ndErrorEstimate)
       IMPLICIT DOUBLE PRECISION (A-H,O-Z)
       DIMENSION FJAC(LDJAC,N),FMAS(LDMAS,NM1),E1(LDE1,NM1),IP1(NM1),
      &     SCAL(N),IPHES(N),Z1(N),Z2(N),Z3(N),F1(N),F2(N),Y0(N),Y(N)
       DIMENSION CONT(N),RPAR(1),IPAR(1)
-      LOGICAL FIRST,REJECT, bPrint
+      LOGICAL FIRST,REJECT, bPrint, bAlwaysUse2ndErrorEstimate
       COMMON/LINAL/MLE,MUE,MBJAC,MBB,MDIAG,MDIFF,MBDIAG
       HEE1=DD1/H
       HEE2=DD2/H
@@ -1501,11 +1502,13 @@ C
       DO  I=1,N
          ERR=ERR+(CONT(I)/SCAL(I))**2
       END DO
-      if (bPrint) print*, '  1st error estimate=', ERR
       ERR=MAX(SQRT(ERR/N),1.D-10)
+      if (bPrint) print*, '  1st error estimate=', ERR
       
       IF (ERR.LT.1.D0) RETURN
-      IF (FIRST.OR.REJECT) THEN
+      ! 1st error estimate is too large
+      ! --> Compute a stabilised one
+      IF ((FIRST.OR.REJECT) .OR. bAlwaysUse2ndErrorEstimate) THEN
           DO I=1,N
              CONT(I)=Y(I)+CONT(I)
           END DO
@@ -1584,14 +1587,14 @@ C ------ HESSENBERG MATRIX OPTION
              CONT(I)=ZSAFE
  640         CONTINUE
           END DO
-C -----------------------------------
+C ------- Compute 2nd error estimate
    88     CONTINUE
           ERR=0.D0 
           DO I=1,N
              ERR=ERR+(CONT(I)/SCAL(I))**2
           END DO
-          if (bPrint) print*, '  2nd error estimate=', ERR
           ERR=MAX(SQRT(ERR/N),1.D-10)
+          if (bPrint) print*, '  2nd error estimate=', ERR
        END IF
        RETURN
 C -----------------------------------------------------------

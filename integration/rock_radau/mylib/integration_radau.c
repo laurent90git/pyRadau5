@@ -16,13 +16,18 @@ void radau5_integration(double tini, double tend, double first_step,
                         double *work_in, // decimal parameters
                         int iout,  // solution export mode
                         int *info, // statistics
-                        int bPrint) // Print flag
+                        int bPrint, // Print flag
+                        int nMaxBadIte, // Maximum number of bad iterations during one Newton loop
+                        int nAlwaysUse2ndErrorEstimate // Whether the stabilised error estimate must be enforce
+                        )
 {
   if (bPrint) {  
     printf("n=%i, rtol=%f, atol=%f\n", n, rtol, atol);
     printf("mljac=%i, mujac=%i\n", mljac, mujac);
     printf("imas=%i, mlmas=%i, mumas=%i\n", imas, mlmas, mumas);
     printf("iout=%i\n", iout);
+    printf("bPrint=%i\n", bPrint);
+    printf("nMaxBadIte=%i\n", nMaxBadIte);
   }
   
   // both rtol and atol are scalars
@@ -77,7 +82,8 @@ void radau5_integration(double tini, double tend, double first_step,
          mas_fcn, &imas, &mlmas, &mumas,
          solout, &iout,
          work, &lwork, iwork, &liwork,
-         &rpar, &ipar, &idid, &bPrint);
+         &rpar, &ipar, &idid,
+         &bPrint, &nMaxBadIte, &nAlwaysUse2ndErrorEstimate);
          
   // save & print statistics
   info[0] = iwork[13];  

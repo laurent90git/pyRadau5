@@ -9,7 +9,7 @@ tf = 0.02
 Tdirich = 1.
 
 if 0:
-    if 1:
+    if 0:
 #        def heat_modelfun(t,y):
 #            """ Simple finite-difference discretisation of the heat equation,
 #                with Neumann BCs """
@@ -26,7 +26,7 @@ if 0:
             dxdt[0]  =  (y[1] - y[0])   / dx**2
             dxdt[-1] =  (y[-2] - 2*y[-1]+ Tdirich) / dx**2
             return dxdt
-        
+
     else:
         #laplacien = np.diags((1,-2,1), shape=(n,n))
         import scipy.sparse
@@ -45,8 +45,8 @@ if 0:
     #mass_matrix[0,n-1]=0
     #mass_matrix = np.ones((n,n))
     #mass_matrix = None
-    
-else: # test with dense mass matrix    
+
+else: # test with dense mass matrix
     import scipy.sparse
     laplacien = scipy.sparse.diags(diagonals=(1,-2,1), offsets=[-1,0,1], shape=(n,n)).toarray()
     laplacien[0,0]=-1
@@ -55,12 +55,6 @@ else: # test with dense mass matrix
     mass_matrix = np.linalg.inv(laplacien)
     heat_modelfun = lambda t,y: (1/dx**2) * (  y + mass_matrix @ b )
     mlmas=mumas=None
-
-#def fcn_rock(n, t, y, ydot, *args):
-    #y_np = np.ctypeslib.as_array(y, shape=(n[0],))
-    #ydot_np = modeleB_odefun(t[0], y_np, options)
-    #for i in range(n[0]):
-#      ydot[i] = ydot_np[i]
 
 if 1:
     out = integration.radau5(tini=0., tend=tf, yini=y0,
@@ -76,19 +70,12 @@ if 1:
                             deadzone=None, step_evo_factor_bounds=None,
                             jacobianRecomputeFactor=None, newton_tol=None,
                             mass_matrix=mass_matrix, var_index=None)
-            
+
     print('nfev={}, njev={}, nlu={}, linsolve={}'.format(out.nfev, out.njev, out.ndec, out.nsol))
 else:
     import scipy.integrate
     out = scipy.integrate.solve_ivp(fun=heat_modelfun, y0=y0, t_span=(0,tf), rtol=1e-6, atol=1e-6,
                                method='LSODA', uband=5, lband=5)
-#ROCK4, solveur explicite (non fonctionnel)
-#out = integration.rock4(t_vec=np.linspace(0,tf,2),
-#                        yini=y0,
-#                        fcn=lambda n, t, y, ydot: fcn_rock(n, t, y, ydot, options=options),
-#                        tol=tol)
-#
-
 
 plt.figure()
 for it in range(len(out.t)):
