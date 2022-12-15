@@ -97,7 +97,8 @@ void radau5_integration(double tini, double tend, double first_step,
   info[5] = iwork[18];  
   info[6] = iwork[19];  
   info[7] = iwork[20];  
-  info[8] = idid;  
+  info[8] = iwork[21];  
+  info[9] = idid;  
 }
 
 void jac_radau(int *n, double *x, double *y, double *dfy, int *ldfy, double *rpar, double *ipar)

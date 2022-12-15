@@ -319,7 +319,10 @@ def radau5(tini, tend, y0, fun,
     out.ndec   = info[5]  # number of lu-decompositions
     out.nsol   = info[6]  # number of forward-backward substitutions
     out.nfail  = info[7]  # number of failed steps (Newton's fault)
-    IDID       = info[8] # exit code
+    out.nlinsolves_err  = info[8]  # number of linear solves for error estimation
+    IDID       = info[9] # exit code
+    
+    print('info=',info)
     
     out.success = (IDID > 0)
     if IDID== 1:  out.msg='COMPUTATION SUCCESSFUL'

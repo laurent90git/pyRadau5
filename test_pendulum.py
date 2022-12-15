@@ -195,8 +195,8 @@ if __name__=='__main__':
     print("Fortran DAE of index {} {}".format(chosen_index, state))
     print("{} time steps ({} = {} accepted + {} rejected + {} failed)".format(
       sol.t.size-1, sol.nstep, sol.naccpt, sol.nrejct, sol.nfail))
-    print("{} fev, {} jev, {} LUdec, {} linsolves".format(
-          sol.nfev, sol.njev, sol.ndec, sol.nsol))
+    print("{} fev, {} jev, {} LUdec, {} linsolves, {} linsolves for error estimation".format(
+          sol.nfev, sol.njev, sol.ndec, sol.nsol, sol.nlinsolves_err))
 
     # recover the time history of each variable
     x,y,vx,vy,lbda = sol.y
@@ -210,10 +210,10 @@ if __name__=='__main__':
                'theta':theta,
                'lbda': lbda,
                'T': T}
-    
+
     #%% Plot report
     print('codes = ', np.unique(sol.reports['code']))
-    
+
     codes, names =  zip(*
                     ((0, 'accepted'),
                      (1, 'rejected'),
@@ -228,22 +228,24 @@ if __name__=='__main__':
     for key, val in zip(names, codes):
       Idict[key] = np.where(sol.reports["code"]==val)[0]
     Idict['failed'] = np.where( np.logical_or(sol.reports["code"]==4, sol.reports["code"]==5))[0]
-    
+
     plt.figure()
     plt.plot(sol.t[:-1], np.diff(sol.t), label=r'$\Delta t$')
-    # plt.plot(sol.reports['t'][Idict['accepted']], sol.reports['dt'][Idict['accepted']], linestyle='--', label='dt2')    
-  
-    plt.plot(sol.reports['t'][Idict['refactor']],        sol.reports['dt'][Idict['refactor']], linestyle='', marker='o', color='tab:green', label='refactor', markersize=15, alpha=0.3)
-    plt.plot(sol.reports['t'][Idict['jacobian_update']], sol.reports['dt'][Idict['jacobian_update']], linestyle='', marker='o', color='tab:green', label='jacobian update', alpha=1)
+    # plt.plot(sol.reports['t'][Idict['accepted']], sol.reports['dt'][Idict['accepted']], linestyle='--', label='dt2')
+
+    # plt.plot(sol.reports['t'][Idict['refactor']],        sol.reports['dt'][Idict['refactor']], linestyle='', marker='o', color='tab:green', label='refactor', markersize=15, alpha=0.3)
+    # plt.plot(sol.reports['t'][Idict['jacobian_update']], sol.reports['dt'][Idict['jacobian_update']], linestyle='', marker='o', color='tab:green', label='jacobian update', alpha=1)
+
+    plt.plot(sol.reports['t'][Idict['jacobian_update']], sol.reports['dt'][Idict['jacobian_update']], linestyle='', marker='o', color='tab:green', label='jacobian update', markersize=15, alpha=0.3)
     plt.plot(sol.reports['t'][Idict['failed']],          sol.reports['dt'][Idict['failed']], linestyle='', marker='o', color='tab:red', label='failed')
     plt.plot(sol.reports['t'][Idict['rejected']],        sol.reports['dt'][Idict['rejected']], linestyle='', marker='o', color='tab:purple', label='rejected')
     # plt.yscale('log')
-    
+
     plt.grid()
     plt.legend()
     plt.xlabel('t (s)')
     plt.ylabel('dt (s)')
-    
+
     #%% Solve the DAE with Scipy's modified Radau
     import sys
     sys.path.append('/stck/lfrancoi/GIT/DAE-Scipy')
@@ -254,7 +256,7 @@ if __name__=='__main__':
                     method=RadauDAE,
                     first_step=min(tf, first_step), dense_output=True,
                     mass_matrix=mass, bPrint=bPrint,
-                    max_newton_ite=6, min_factor=0.2, max_factor=10,
+                    max_newton_ite=8, min_factor=0.2, max_factor=10,
                     factor_on_non_convergence = 0.5,
                     var_index=var_index,
                     # newton_tol=1e-4,

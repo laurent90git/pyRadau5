@@ -377,7 +377,7 @@ C *** *** *** *** *** *** *** *** *** *** *** *** ***
       DIMENSION RPAR(*),IPAR(*)
       LOGICAL IMPLCT,JBAND,ARRET,STARTN,PRED, bPrint, bChangeTolerances, bAlwaysUse2ndErrorEstimate, bReport
       INTEGER nPrint, nMaxBadIte, var_index(N), nReport
-      INTEGER  NFCN, NJAC, NSTEP, NACCPT, NREJCT, NFAILED, NDEC, NSOL
+      INTEGER  NFCN, NJAC, NSTEP, NACCPT, NREJCT, NFAILED, NDEC, NSOL, nLinSolveErr
       EXTERNAL FCN,JAC,MAS,SOLOUT, REPORTFUN
       
       if (nPrint > 0) then
@@ -414,6 +414,7 @@ C *** *** *** *** *** *** ***
        NFAILED=0
        NDEC=0
        NSOL=0
+       nLinSolveErr=0
        ARRET=.FALSE.
 C -------- UROUND   SMALLEST NUMBER SATISFYING 1.0D0+UROUND>1.0D0  
       IF (WORK(1).EQ.0.0D0) THEN
@@ -667,7 +668,7 @@ C -------- CALL TO CORE INTEGRATOR ------------
      &   WORK(IEZ3),WORK(IEY0),WORK(IESCAL),WORK(IEF1),WORK(IEF2),
      &   WORK(IEF3),WORK(IEJAC),WORK(IEE1),WORK(IEE2R),WORK(IEE2I),
      &   WORK(IEMAS),IWORK(IEIP1),IWORK(IEIP2),IWORK(IEIPH),
-     &   WORK(IECON),NFCN,NJAC,NSTEP,NACCPT,NREJCT,NFAILED,NDEC,NSOL,RPAR,IPAR,
+     &   WORK(IECON),NFCN,NJAC,NSTEP,NACCPT,NREJCT,NFAILED,NDEC,NSOL,nLinSolveErr,RPAR,IPAR,
      &   bPrint, nMaxBadIte, bAlwaysUse2ndErrorEstimate, var_index,
      &   REPORTFUN, bReport)
       IWORK(14)=NFCN
@@ -678,6 +679,8 @@ C -------- CALL TO CORE INTEGRATOR ------------
       IWORK(19)=NDEC
       IWORK(20)=NSOL
       IWORK(21)=NFAILED
+      IWORK(22)=nLinSolveErr
+      
 C -------- RESTORE TOLERANCES
       if (bChangeTolerances) then
           EXPM=1.0D0/EXPM
@@ -711,7 +714,7 @@ C     !&   NIND1,NIND2,NIND3,PRED,FACL,FACR,M1,M2,NM1,
      &   PRED,FACL,FACR,M1,M2,NM1,
      &   IMPLCT,BANDED,LDJAC,LDE1,LDMAS,Z1,Z2,Z3,
      &   Y0,SCAL,F1,F2,F3,FJAC,E1,E2R,E2I,FMAS,IP1,IP2,IPHES,
-     &   CONT,NFCN,NJAC,NSTEP,NACCPT,NREJCT,NFAILED,NDEC,NSOL,RPAR,IPAR,
+     &   CONT,NFCN,NJAC,NSTEP,NACCPT,NREJCT,NFAILED,NDEC,NSOL,nLinSolveErr,RPAR,IPAR,
      &   bPrint, nMaxBadIte,bAlwaysUse2ndErrorEstimate, var_index,
      &   REPORTFUN, bReport)
 C ----------------------------------------------------------
@@ -733,7 +736,7 @@ C ----------------------------------------------------------
       LOGICAL LAST, PRED, bHighIndex
       EXTERNAL FCN, REPORTFUN
       LOGICAL bPrint, bAlwaysUse2ndErrorEstimate
-      INTEGER nMaxBadIte, NBAD, var_index(N), var_exp(N), NFAILED
+      INTEGER nMaxBadIte, NBAD, var_index(N), var_exp(N), NFAILED, nLinSolveErr, new_nLinSolveErr
                   
 C *** *** *** *** *** *** ***
 C  INITIALISATIONS
@@ -1045,6 +1048,7 @@ C *** *** *** *** *** *** ***
                                 if (nMaxBadIte>0) print*, '    Too many bad iterations'
                                 print*, '    Newton will not converge to the desired precision'
                              endif                                
+                             if (bReport) CALL REPORTFUN(X,H,5) ! poor convergence
                              QNEWT=DMAX1(1.0D-4,DMIN1(20.0D0,DYTH))
                              HHFAC=.8D0*QNEWT**(-1.0D0/(4.0D0+NIT-1-NEWT))
                              H=HHFAC*H
@@ -1054,10 +1058,8 @@ C *** *** *** *** *** *** ***
                              LAST=.FALSE.
                              NFAILED=NFAILED+1
                              IF (CALJAC) then ! Jacobian had already been udpated at current X --> only decrease dt and refactor
-                                if (bReport) CALL REPORTFUN(X,H,5) ! refactor jacobian
                                 GOTO 20 ! refactor jacobian
                              else
-                                if (bReport) CALL REPORTFUN(X,H,5) ! update jacobian
                                 GOTO 10 ! update jacobian
                              endif
                         endif
@@ -1100,7 +1102,10 @@ C *** *** *** *** *** *** ***
       CALL ESTRAD (N,FJAC,LDJAC,MLJAC,MUJAC,FMAS,LDMAS,MLMAS,MUMAS,
      &          H,DD1,DD2,DD3,FCN,NFCN,Y0,Y,IJOB,X,M1,M2,NM1,
      &          E1,LDE1,Z1,Z2,Z3,CONT,F1,F2,IP1,IPHES,SCAL,ERR,
-     &          FIRST,REJECT,FAC1,RPAR,IPAR, bPrint, bAlwaysUse2ndErrorEstimate)
+     &          FIRST,REJECT,FAC1,RPAR,IPAR,
+     &          new_nLinSolveErr, bPrint, bAlwaysUse2ndErrorEstimate)
+
+      nLinSolveErr = nLinSolveErr + new_nLinSolveErr
 C --- COMPUTATION OF HNEW
 C --- WE REQUIRE .2<=HNEW/H<=8.
       FAC=MIN(SAFE,CFAC/(NEWT+2*NIT))
@@ -1209,7 +1214,7 @@ C --- UNEXPECTED STEP-REJECTION
           if (bReport) CALL REPORTFUN(X,H,4) ! matrix is singular
           IF (NSING.GE.5) GOTO 176
       ELSE
-          if (bReport) CALL REPORTFUN(X,H,5) ! Newton failed
+          if (bReport) CALL REPORTFUN(X,H,6) ! Newton failed (bis)
       END IF
       NFAILED=NFAILED+1
       IF (bPrint) print*, '  dt will be reduced'

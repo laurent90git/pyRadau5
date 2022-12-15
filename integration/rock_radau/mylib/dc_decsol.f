@@ -1274,16 +1274,19 @@ C
      &          H,DD1,DD2,DD3,FCN,NFCN,Y0,Y,IJOB,X,M1,M2,NM1,
      &          E1,LDE1,Z1,Z2,Z3,CONT,F1,F2,IP1,IPHES,SCAL,ERR,
      &          FIRST,REJECT,FAC1,RPAR,IPAR,
-     &          bPrint, bAlwaysUse2ndErrorEstimate)
+     &          nLinSolveErr, bPrint, bAlwaysUse2ndErrorEstimate)
       IMPLICIT DOUBLE PRECISION (A-H,O-Z)
       DIMENSION FJAC(LDJAC,N),FMAS(LDMAS,NM1),E1(LDE1,NM1),IP1(NM1),
      &     SCAL(N),IPHES(N),Z1(N),Z2(N),Z3(N),F1(N),F2(N),Y0(N),Y(N)
       DIMENSION CONT(N),RPAR(1),IPAR(1)
+      INTEGER nLinSolveErr
       LOGICAL FIRST,REJECT, bPrint, bAlwaysUse2ndErrorEstimate
       COMMON/LINAL/MLE,MUE,MBJAC,MBB,MDIAG,MDIFF,MBDIAG
       HEE1=DD1/H
       HEE2=DD2/H
       HEE3=DD3/H
+      nLinSolveErr = 0
+      
       GOTO (1,2,3,4,5,6,7,55,55,55,11,12,13,14,15), IJOB
 C
    1  CONTINUE
@@ -1498,6 +1501,7 @@ C
 C --------------------------------------
 C
   77  CONTINUE
+      nLinSolveErr = nLinSolveErr + 1
       ERR=0.D0
       DO  I=1,N
          ERR=ERR+(CONT(I)/SCAL(I))**2
@@ -1589,7 +1593,8 @@ C ------ HESSENBERG MATRIX OPTION
           END DO
 C ------- Compute 2nd error estimate
    88     CONTINUE
-          ERR=0.D0 
+          nLinSolveErr = nLinSolveErr + 1
+          ERR=0.D0
           DO I=1,N
              ERR=ERR+(CONT(I)/SCAL(I))**2
           END DO
