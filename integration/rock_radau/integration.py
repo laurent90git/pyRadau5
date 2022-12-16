@@ -108,52 +108,65 @@ def radau5(tini, tend, y0, fun,
           if bDebug: print('mass_np=', mass_np)
         else: # sparse matrix
           if bDebug: print(' mass matrix is not dense')
-          for i in range(n[0]):
-            #print(f'i={i}')
-            for j in range(max(0,i-mlmas), min(neq,i+mumas)+1):
-              #print(f' j={j}')
-              i2 = i-j+mumas#+1
-           #   print(f' i-j+mumas+1=', i2)
-          #    print('   mass_matrix[i,j]=',mass_matrix[i,j])
-         #     print('   am[i-j+mumas+1][j]=',am[i2][j])
-              am[i2][j] = mass_matrix[i,j]
-        #      print('-> am[i-j+mumas+1][j]=',am[i2][j])
-          if bDebug: print('after copy')
-      #    for i in range(lmas[0]):
-       #     print(f'   am[{i}]=',am[i])
+          for diag_num in range(-mljac,mujac+1,1):
+              print(diag_num)
+              current_diag = np.diag(mass_matrix, k=diag_num)
+              nstart=abs(diag_num)
+              print(nstart, '-->', n[0]-nstart)
+              for j in range(nstart,n[0]-nstart+1):
+                  print('  ',j)
+                  am[diag_num+mljac][j] = current_diag[j]
+
+      #     for i in range(n[0]):
+      #       print(f'i={i}')
+      #       for j in range(max(0,i-mlmas), min(neq,i+mumas)+1):
+      #         #print(f' j={j}')
+      #         i2 = i-j+mumas#+1
+      #         print(f' i-j+mumas+1=', i2)
+      #     #    print('   mass_matrix[i,j]=',mass_matrix[i,j])
+      #    #     print('   am[i-j+mumas+1][j]=',am[i2][j])
+      #         am[i2][j] = mass_matrix[i,j]
+      #   #      print('-> am[i-j+mumas+1][j]=',am[i2][j])
+      #     if bDebug: print('after copy')
+      # #    for i in range(lmas[0]):
+      #  #     print(f'   am[{i}]=',am[i])
 
           # for debug checks
           mass_np = np.ctypeslib.as_array(am, shape=(lmas[0], n[0])) # transform input into a Numpy array
           # reconstructed_mass_matrix = np.zeros((neq,neq))
           if bDebug: print('mass_np=', mass_np)
+          import pdb; pdb.set_trace()
         #TODO:check diagonals are equal
         #  for i in range(n[0]):
         #    for j in range(max(0,i-mlmas), min(neq,i+mumas)):
         #      reconstructed_mass_matrix[i,j] = mass_np[i-j+mumas,j][j]
         #  assert np.allclose(reconstructed_mass_matrix, mass_matrix, rtol=1e-13, atol=1e-13), 'mass matrix is wrongly transcribed'
 
-
-
+    lmas=mlmas+mumas+1
+    mass_fcn(n=[y0.size], am_in=np.zeros((lmas,y0.size)), lmas=[lmas], rpar=None, ipar=None)
+    return
 
     def solout(nr, told, t, y, cont, lrc, n, rpar, ipar, irtrn):
-        #if bPrint: print(f'solout called after step tn={told[0]} to tnp1={t[0]}')
+        if bPrint: print(f'solout called after step tn={told[0]} to tnp1={t[0]}')
         tsol.append(t[0])
         y_np = np.ctypeslib.as_array(y, shape=(n[0],)).copy() # transform input into a Numpy array
         ysol.append(y_np)
         irtrn[0] = 1 # if <0, Radau5 will exit --> TODO: handle events with that ?
     if bReport:
         nReport=1
-        reports={"t":[],"dt":[],"code":[]}    
+        reports={"t":[],"dt":[],"code":[],'newton_iterations':[], 'bad_iterations':[]}
     else:
         nReport=0
         reports=None
-    def reportfun(t,dt,code):
+    def reportfun(t,dt,code,newt,nbad):
         # print('Reporting',t[0],dt[0],code[0])
         reports['t'].append(t[0])
         reports['dt'].append(dt[0])
         reports['code'].append(code[0])
+        reports['newton_iterations'].append(newt[0])
+        reports['bad_iterations'].append(nbad[0])
 
-        
+
     fcn_type = ct.CFUNCTYPE(None, ct.POINTER(ct.c_int), ct.POINTER(ct.c_double), ct.POINTER(ct.c_double),
                             ct.POINTER(ct.c_double), ct.POINTER(ct.c_double), ct.POINTER(ct.c_int))
 
@@ -164,8 +177,9 @@ def radau5(tini, tend, y0, fun,
     solout_type = ct.CFUNCTYPE(None, ct.POINTER(ct.c_int), ct.POINTER(ct.c_double), ct.POINTER(ct.c_double),
                                ct.POINTER(ct.c_double), ct.POINTER(ct.c_double), ct.POINTER(ct.c_int),
                                ct.POINTER(ct.c_int), ct.POINTER(ct.c_double), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int))
-    report_fcn_type = ct.CFUNCTYPE(None, ct.POINTER(ct.c_double), ct.POINTER(ct.c_double), ct.POINTER(ct.c_int))
-    
+    report_fcn_type = ct.CFUNCTYPE(None, ct.POINTER(ct.c_double), ct.POINTER(ct.c_double),
+                                   ct.POINTER(ct.c_int), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int))
+
     c_radau5 = c_integration.radau5_integration
     c_radau5.argtypes = [ct.c_double, ct.c_double, ct.c_double,
                          ct.c_int,  np.ctypeslib.ndpointer(dtype = np.float64), np.ctypeslib.ndpointer(dtype = np.float64),
@@ -236,7 +250,7 @@ def radau5(tini, tend, y0, fun,
             var_index = var_index.astype(np.int32)#, casting='safe')
       else:
          var_index = np.zeros((y0.size,), dtype=np.int32)
-    
+
     if bUsePredictiveController is not None:
       if bUsePredictiveController:
         iwork[8] = 1 # advanced time step controller of Gustafson
@@ -269,7 +283,7 @@ def radau5(tini, tend, y0, fun,
     if bDebug:
       print('iwork = ', iwork)
       print('work = ', work)
-      
+
     if bAlwaysApply2ndEstimate:
         nAlwaysUse2ndErrorEstimate = 1
     else:
@@ -321,9 +335,9 @@ def radau5(tini, tend, y0, fun,
     out.nfail  = info[7]  # number of failed steps (Newton's fault)
     out.nlinsolves_err  = info[8]  # number of linear solves for error estimation
     IDID       = info[9] # exit code
-    
+
     print('info=',info)
-    
+
     out.success = (IDID > 0)
     if IDID== 1:  out.msg='COMPUTATION SUCCESSFUL'
     if IDID== 2:  out.msg='COMPUT. SUCCESSFUL (INTERRUPTED BY SOLOUT)'

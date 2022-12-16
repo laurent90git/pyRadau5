@@ -9,7 +9,7 @@ typedef void(*func_jac_radau)(int*, double*, double*, double*, int*, double*, do
 
 typedef void(*func_solout_radau)(int*, double*, double*, double*, double*, int*, int*, double*, int*, int*);
 
-typedef void(*func_report_radau)(double*, double*, int*);
+typedef void(*func_report_radau)(double*, double*, int*, int*, int*);
        
 
 void radau5_integration(double tini, double tend, double first_step, int n, double *y0,
@@ -33,6 +33,6 @@ void radau5(int *n, func_radau fcn, double *x, double *y, double *xend, double *
 
 void jac_radau(int *n, double *x, double *y, double *dfy, int *ldfy, double *rpar, double *ipar);
 
-void reportfun(double t, double dt, int code);
+//void reportfun(double t, double dt, int code, int newt, int nbad);
 
 #endif

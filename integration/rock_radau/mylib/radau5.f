@@ -736,6 +736,7 @@ C ----------------------------------------------------------
       LOGICAL LAST, PRED, bHighIndex
       EXTERNAL FCN, REPORTFUN
       LOGICAL bPrint, bAlwaysUse2ndErrorEstimate
+      DOUBLE PRECISION RES_NORM, RES_NORM_OLD, THRES
       INTEGER nMaxBadIte, NBAD, var_index(N), var_exp(N), NFAILED, nLinSolveErr, new_nLinSolveErr
                   
 C *** *** *** *** *** *** ***
@@ -850,7 +851,7 @@ C  COMPUTATION OF THE JACOBIAN
 C *** *** *** *** *** *** ***
       NJAC=NJAC+1
       IF (bPrint) print*, 'Updating Jacobian' 
-      if (bReport) CALL REPORTFUN(X,H,-10) ! update jacobian
+      if (bReport) CALL REPORTFUN(X,H,-10,-1,-1) ! update jacobian
       IF (IJAC.EQ.0) THEN
 C --- COMPUTE JACOBIAN MATRIX NUMERICALLY
          IF (BANDED) THEN
@@ -906,7 +907,7 @@ C --- COMPUTE THE MATRICES E1 AND E2 AND THEIR DECOMPOSITIONS
       ALPHN=ALPH/H
       BETAN=BETA/H
       IF (bPrint) print*, 'Decomposing matrices'
-      if (bReport) CALL REPORTFUN(X,H,-11) ! refactor jacobian
+      if (bReport) CALL REPORTFUN(X,H,-11,-1,-1) ! refactor jacobian
       CALL DECOMR(N,FJAC,LDJAC,FMAS,LDMAS,MLMAS,MUMAS,
      &            M1,M2,NM1,FAC1,E1,LDE1,IP1,IER,IJOB,CALHES,IPHES)
       IF (IER.NE.0) GOTO 78
@@ -938,7 +939,7 @@ C --- COMPUTE THE MATRICES E1 AND E2 AND THEIR DECOMPOSITIONS
         SCAL(1:N) = SCAL(1:N) / (HHFAC ** var_exp)
       endif
       if (bPrint) print*, 'HHFAC=',HHFAC
-      if (bPrint) print*, 'SCAL=',SCAL
+      !if (bPrint) print*, 'SCAL=',SCAL
       XPH=X+H
 C *** *** *** *** *** *** ***
 C  STARTING VALUES FOR NEWTON ITERATION
@@ -1006,9 +1007,10 @@ C *** *** *** *** *** *** ***
               Z2(I)=TI21*A1+TI22*A2+TI23*A3
               Z3(I)=TI31*A1+TI32*A2+TI33*A3
             END DO
+            RES_NORM_OLD = RES_NORM
             CALL SLVRAD(N,FJAC,LDJAC,MLJAC,MUJAC,FMAS,LDMAS,MLMAS,MUMAS,
      &               M1,M2,NM1,FAC1,ALPHN,BETAN,E1,E2R,E2I,LDE1,Z1,Z2,Z3,
-     &               F1,F2,F3,CONT,IP1,IP2,IPHES,IER,IJOB)
+     &               F1,F2,F3,CONT,IP1,IP2,IPHES,IER,IJOB,RES_NORM)
             NSOL=NSOL+1
             NEWT=NEWT+1
             ! Compute norm of Newton increment
@@ -1019,23 +1021,34 @@ C *** *** *** *** *** *** ***
      &          +(Z3(I)/DENOM)**2
             END DO
             DYNO=DSQRT(DYNO/N3)
+            IF (bPrint) print*, '    Norm of the residuals: ', RES_NORM
             IF (bPrint) print*, '    Scaled norm of the increment: ', DYNO
             
             IF (NEWT.GT.1.AND.NEWT.LT.NIT) THEN
                 THQ=DYNO/DYNOLD ! current convergence rate
+                THRES=RES_NORM/RES_NORM_OLD ! current convergence rate for residuals
+                !TODO: properly combine rate of convergence on increment and residuals to assess convergence
                 IF (NEWT.EQ.2) THEN
                    THETA=THQ
                 ELSE
                    THETA=SQRT(THQ*THQOLD) ! some kind of rate smoothing ?
                 END IF
-                if (bPrint) print*, '    THQ=',THQ,', THETA=', THETA,', THQOLD=', THQOLD
+                if (bPrint) then
+                    print*, '    THQ=',THQ,', THETA=', THETA,', THQOLD=', THQOLD, ', THRES=', THRES
+                    if (THRES>0.99) then
+                        print*, 'THRES is large !'
+                        if (THQ>0.99) then
+                            print*, ' /!\ both residual and increment norms increase...'
+                        endif
+                    endif
+                endif
                 THQOLD=THQ
                 IF (THETA.LT.0.99D0) THEN
                     FACCON=THETA/(1.0D0-THETA)
                     ! Estimated true error = FACCON * DYNO
-                    DYTH=FACCON*DYNO*THETA**(NIT-1-NEWT)/FNEWT ! Estimated true error after NIT iterations
+                    DYTH=FACCON*DYNO*THETA**(NIT-1-NEWT)/FNEWT ! Estimated true error after NIT iterations (relative to Newton tolerance)
                     if (bPrint) then
-                        print*, '    Estimated true error  =',FACCON*DYNO
+                        print*, '    Estimated true error  =',FACCON*DYNO/FNEWT
                         print*, '    Estimated final error =',DYTH
                     endif
 
@@ -1048,7 +1061,7 @@ C *** *** *** *** *** *** ***
                                 if (nMaxBadIte>0) print*, '    Too many bad iterations'
                                 print*, '    Newton will not converge to the desired precision'
                              endif                                
-                             if (bReport) CALL REPORTFUN(X,H,5) ! poor convergence
+                             if (bReport) CALL REPORTFUN(X,H,5,NEWT,NBAD) ! poor convergence
                              QNEWT=DMAX1(1.0D-4,DMIN1(20.0D0,DYTH))
                              HHFAC=.8D0*QNEWT**(-1.0D0/(4.0D0+NIT-1-NEWT))
                              H=HHFAC*H
@@ -1070,7 +1083,7 @@ C *** *** *** *** *** *** ***
                         GOTO 78
                     ELSE
                         if (NBAD<nMaxBadIte) then
-                            IF (bPrint) print*, '    Bad iteration, rate=',THETA,' > 1'
+                            IF (bPrint) print*, '    Bad iteration, rate=',THETA,' > 0.99'
                             NBAD = NBAD + 1
                         ELSE
                             IF (bPrint) print*, '    Too many bad iterations'
@@ -1119,7 +1132,7 @@ C *** *** *** *** *** *** ***
 C --- STEP IS ACCEPTED 
          FIRST=.FALSE.
          NACCPT=NACCPT+1
-         if (bReport) CALL REPORTFUN(X,H,0) ! step accepted
+         if (bReport) CALL REPORTFUN(X,H,0,NEWT,NBAD) ! step accepted
          IF (PRED) THEN
 C       --- PREDICTIVE CONTROLLER OF GUSTAFSSON
             IF (NACCPT.GT.1) THEN
@@ -1191,7 +1204,7 @@ C       --- PREDICTIVE CONTROLLER OF GUSTAFSSON
          GOTO 10 !update jacobian
       ELSE
 C --- STEP IS REJECTED  
-         if (bReport) CALL REPORTFUN(X,H,1) ! step rejected
+         if (bReport) CALL REPORTFUN(X,H,1,NEWT,NBAD) ! step rejected
          REJECT=.TRUE.
          LAST=.FALSE.
          IF (FIRST) THEN
@@ -1211,10 +1224,10 @@ C --- UNEXPECTED STEP-REJECTION
       IF (IER.NE.0) THEN
           IF (bPrint) print*, '  Singular problem'
           NSING=NSING+1
-          if (bReport) CALL REPORTFUN(X,H,4) ! matrix is singular
+          if (bReport) CALL REPORTFUN(X,H,4,NEWT,NBAD) ! matrix is singular
           IF (NSING.GE.5) GOTO 176
       ELSE
-          if (bReport) CALL REPORTFUN(X,H,6) ! Newton failed (bis)
+          if (bReport) CALL REPORTFUN(X,H,6,NEWT,NBAD) ! Newton failed (bis)
       END IF
       NFAILED=NFAILED+1
       IF (bPrint) print*, '  dt will be reduced'

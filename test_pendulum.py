@@ -150,8 +150,8 @@ if __name__=='__main__':
     ###### Parameters to play with
     chosen_index = 3 # The index of the DAE formulation
     tf = 5. #10.0        # final time (one oscillation is ~2s long)
-    rtol=1e-7; atol=rtol # relative and absolute tolerances for time adaptation
-    first_step=1e-6
+    rtol=1e-1; atol=rtol # relative and absolute tolerances for time adaptation
+    first_step=1e-2
     # dt_max = np.inf
     # rtol=1e-3; atol=rtol # relative and absolute tolerances for time adaptation
     bPrint=False # if True, additional printouts from Radau during the computation
@@ -180,12 +180,12 @@ if __name__=='__main__':
                         nmax_step = 100000,
                         max_step = tf,
                         first_step=min(tf, first_step),
-                        max_ite_newton=5, bUseExtrapolatedGuess=True,
+                        max_ite_newton=7, bUseExtrapolatedGuess=True,
                         bUsePredictiveController=True, safetyFactor=None,
                         deadzone=None, step_evo_factor_bounds=None,
                         jacobianRecomputeFactor=None, newton_tol=None,
                         mass_matrix=mass, var_index=var_index,
-                        bPrint=True, nMaxBadIte=2, bAlwaysApply2ndEstimate=True,
+                        bPrint=bPrint, nMaxBadIte=3, bAlwaysApply2ndEstimate=True,
                         bReport=True)
     sol=solfort
     if solfort.success:
@@ -239,12 +239,20 @@ if __name__=='__main__':
     plt.plot(sol.reports['t'][Idict['jacobian_update']], sol.reports['dt'][Idict['jacobian_update']], linestyle='', marker='o', color='tab:green', label='jacobian update', markersize=15, alpha=0.3)
     plt.plot(sol.reports['t'][Idict['failed']],          sol.reports['dt'][Idict['failed']], linestyle='', marker='o', color='tab:red', label='failed')
     plt.plot(sol.reports['t'][Idict['rejected']],        sol.reports['dt'][Idict['rejected']], linestyle='', marker='o', color='tab:purple', label='rejected')
-    # plt.yscale('log')
+    plt.legend()
+    plt.yscale('log')
 
+    ax2 = plt.gca().twinx()
+    ax2.plot(sol.reports['t'][Idict['accepted']], sol.reports['newton_iterations'][Idict['accepted']], label='all', color='tab:green', linestyle='--')
+    ax2.plot(sol.reports['t'][Idict['accepted']], sol.reports['bad_iterations'][Idict['accepted']], label='bad', color='tab:red', linestyle='--')
+    ax2.legend()
+    ax2.set_ylabel('Newton iterations')
     plt.grid()
     plt.legend()
     plt.xlabel('t (s)')
     plt.ylabel('dt (s)')
+    plt.title('Radau5 analysis')
+
 
     #%% Solve the DAE with Scipy's modified Radau
     import sys
@@ -266,6 +274,7 @@ if __name__=='__main__':
                     zero_algebraic_error=False,
                     bAlwaysApply2ndEstimate = True,
                     max_bad_ite=1,
+                    bUsePredictiveNewtonStoppingCriterion=False,
                     bDebug=bDebug)
     sol = solpy
     if sol.success:

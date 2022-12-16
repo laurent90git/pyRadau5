@@ -1,6 +1,8 @@
 from integration.rock_radau import integration
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy.sparse
+
 n = 100
 x = np.linspace(0,1,n)
 y0 = (np.exp((x-0.5)**2) - 1)/(np.exp(0.5**2) - 1)
@@ -8,43 +10,27 @@ dx = x[1]-x[0]
 tf = 0.02
 Tdirich = 1.
 
-if 0:
-    if 0:
-#        def heat_modelfun(t,y):
-#            """ Simple finite-difference discretisation of the heat equation,
-#                with Neumann BCs """
-#            dxdt = np.empty_like(y)
-#            dxdt[1:-1] = (y[2:] - 2 * y[1:-1] + y[:-2]) / dx**2
-#            dxdt[0]  =  (y[1] - y[0])   / dx**2
-#            dxdt[-1] =  (y[-2] - y[-1]) / dx**2
-#            return dxdt
-        def heat_modelfun(t,y):
-            """ Simple finite-difference discretisation of the heat equation,
-                with left Neumann BC and right Dirichlet BC """
-            dxdt = np.empty_like(y)
-            dxdt[1:-1] = (y[2:] - 2 * y[1:-1] + y[:-2]) / dx**2
-            dxdt[0]  =  (y[1] - y[0])   / dx**2
-            dxdt[-1] =  (y[-2] - 2*y[-1]+ Tdirich) / dx**2
-            return dxdt
+if 1: # test with banded mass matrix
+    # test slightly perturbed mass matrix
+    mass_matrix = scipy.sparse.diags(diagonals=(-4e-1,1,-4e-1), offsets=[-1,0,1], shape=(n,n)).toarray()
+    # minv = np.linalg.inv(mass_matrix)
+    mumas=mlmas=3
 
-    else:
-        #laplacien = np.diags((1,-2,1), shape=(n,n))
-        import scipy.sparse
-        laplacien = scipy.sparse.diags(diagonals=(1,-2,1), offsets=[-1,0,1], shape=(n,n)).toarray()
-        laplacien[0,0]=-1
-        def heat_modelfun(t,y):
-            dxdt = laplacien @ y
-            dxdt[-1] +=Tdirich
-            return (1/dx**2) * dxdt
+    # mass_matrix = np.eye(n)
+    # # mumas=mlmas=n-4
+    # mumas=mlmas=0
 
-    mass_matrix = np.eye(n)
-    #mumas=mlmas=n-4
-    mumas=mlmas=0
-    #mass_matrix = np.eye(n) + np.random.random((n,n))*1e-2
-    #mass_matrix[n-1,0]=0
-    #mass_matrix[0,n-1]=0
-    #mass_matrix = np.ones((n,n))
-    #mass_matrix = None
+    def heat_modelfun(t,y):
+        """ Simple finite-difference discretisation of the heat equation,
+            with left Neumann BC and right Dirichlet BC """
+        dxdt = np.empty_like(y)
+        dxdt[1:-1] = (y[2:] - 2 * y[1:-1] + y[:-2]) / dx**2
+        dxdt[0]  =  (y[1] - y[0])   / dx**2
+        dxdt[-1] =  (y[-2] - 2*y[-1]+ Tdirich) / dx**2
+        return dxdt
+
+
+
 
 else: # test with dense mass matrix
     import scipy.sparse
@@ -70,12 +56,13 @@ if 1:
                             deadzone=None, step_evo_factor_bounds=None,
                             jacobianRecomputeFactor=None, newton_tol=None,
                             mass_matrix=mass_matrix, var_index=None,
-                            bPrint=True)
+                            bPrint=False)
 
     print('nfev={}, njev={}, nlu={}, linsolve={}'.format(out.nfev, out.njev, out.ndec, out.nsol))
 else:
+    # assert mass_matrix is None, 'LSODA is not comaptible with a mass matrix'
     import scipy.integrate
-    out = scipy.integrate.solve_ivp(fun=heat_modelfun, y0=y0, t_span=(0,tf), rtol=1e-6, atol=1e-6,
+    out = scipy.integrate.solve_ivp(fun=heat_modelfun, y0=y0, t_span=(0,tf), rtol=1e-4, atol=1e-4,
                                method='LSODA', uband=5, lband=5)
 
 plt.figure()
