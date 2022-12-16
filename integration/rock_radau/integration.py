@@ -107,8 +107,8 @@ def radau5(tini, tend, y0, fun,
           else:
               for diag_num in range(-mlmas,mumas+1,1):
                   current_diag = np.diag(mass_matrix, k=diag_num)
-                  print('diag_offset=', diag_num)
-                  print('  diag.size=',current_diag.size)
+                  #print('diag_offset=', diag_num)
+                  #print('  diag.size=',current_diag.size)
                   if diag_num<0: # lower diagonals
                     am[mbdiag - 1 - diag_num][:diag_num] = current_diag
                   elif diag_num>0: # upper diagonals
@@ -126,9 +126,12 @@ def radau5(tini, tend, y0, fun,
                 print(f'AM({i+1},:) = ', am[i][:])
         
         # to correct an issue with the fact that is array is not ordered in the same manner as in fortran
-        vector = np.reshape(am, (n[0]*lmas[0]), order='F')
-        vector = vector.reshape((n[0],lmas[0]), order='F').T          
-        am[:] = vector[:]
+        #if 0:
+        #    vector = np.reshape(am, (n[0]*lmas[0]), order='F')
+        #    vector = vector.reshape((n[0],lmas[0]), order='F').T          
+        #    am[:] = vector[:]
+        #else:
+        am[:] = np.reshape(am, (n[0], lmas[0]), order='F').T
         return
                   
     def solout(nr, told, t, y, cont, lrc, n, rpar, ipar, irtrn):
