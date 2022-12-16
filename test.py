@@ -12,10 +12,10 @@ Tdirich = 1.
 
 if 1: # test with banded mass matrix
     # test slightly perturbed mass matrix
-    mass_matrix = scipy.sparse.diags(diagonals=(-4e-1,1,-4e-1), offsets=[-1,0,1], shape=(n,n)).toarray()
-    # minv = np.linalg.inv(mass_matrix)
-    mumas=mlmas=3
-
+    mass_matrix = scipy.sparse.diags(diagonals=(-4e-1,1,-3e-1), offsets=[-1,0,1], shape=(n,n)).toarray(); mumas=1;mlmas=1;
+    #mass_matrix = np.eye(n); mumas=mlmas=0
+    minv = np.linalg.inv(mass_matrix)
+    
     # mass_matrix = np.eye(n)
     # # mumas=mlmas=n-4
     # mumas=mlmas=0
@@ -27,9 +27,8 @@ if 1: # test with banded mass matrix
         dxdt[1:-1] = (y[2:] - 2 * y[1:-1] + y[:-2]) / dx**2
         dxdt[0]  =  (y[1] - y[0])   / dx**2
         dxdt[-1] =  (y[-2] - 2*y[-1]+ Tdirich) / dx**2
+        # return minv @ dxdt
         return dxdt
-
-
 
 
 else: # test with dense mass matrix
@@ -42,14 +41,16 @@ else: # test with dense mass matrix
     heat_modelfun = lambda t,y: (1/dx**2) * (  y + mass_matrix @ b )
     mlmas=mumas=None
 
+#print('mass_matrix=\n', mass_matrix)
+
 if 1:
     out = integration.radau5(tini=0., tend=tf, y0=y0,
                             fun=heat_modelfun,
                             mljac=n, mujac=n,
-                            mlmas=mlmas, mumas=mlmas,
+                            mlmas=mlmas, mumas=mumas,
                             rtol=1e-4, atol=1e-4,
                             t_eval=None,
-                            nmax_step = 100000,
+                            nmax_step = 100,
                             max_step = tf,
                             max_ite_newton=None, bUseExtrapolatedGuess=None,
                             bUsePredictiveController=None, safetyFactor=None,

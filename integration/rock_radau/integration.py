@@ -2,30 +2,35 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import ctypes as ct
-import copy
 
-#############################################################################
-class ode_result:
-    def __init__(self, y, t, nfev):
-        self.y = y
-        self.t = t
-        self.nfev = nfev
-        self.success = True
+# try:
+#   from scipy.linalg import bandwith
+# except ImportError:
+def bandwith(matrix):
+    lband=uband=0
+    assert matrix.shape[0]==matrix.shape[1], "only square mass matrices are allowed !"
+    n = matrix.shape[0]
+    for i in range(n):
+      for j in range(i):
+        if matrix[i,j]!=0:
+          lband = max(lband, i-j)
+      for j in range(i,n):
+        if matrix[i,j]!=0:
+          uband = max(uband, j-i)
+    if uband==n-1:
+      uband=n
+    if lband==n-1:
+      lband=n
+    return (lband, uband)
+    
 
-#############################################################################
 class radau_result:
     def __init__(self, y, t):
         self.y = y
         self.t = t
-#        self.nfev = nfev
-#        self.njev = njev
-#        self.nstep = nstep
-#        self.naccpt = naccpt
-#        self.nrejct = nrejct
-#        self.ndec = ndec
-#        self.nsol = nsol
 
-#############################################################################
+
+
 def radau5(tini, tend, y0, fun,
     mujac, mljac,
     mass_matrix=None, mlmas=None, mumas=None, var_index=None,
@@ -60,92 +65,72 @@ def radau5(tini, tend, y0, fun,
       mlmas = mumas = 0
       imas = 0
     else:
-      try:
-        from scipy.linalg import bandwith
-      except ImportError:
-        def bandwith(matrix):
-          lband=uband=0
-          assert matrix.shape[0]==matrix.shape[1], "only square mass matrices are allowed !"
-          n = matrix.shape[0]
-          for i in range(n):
-            for j in range(i):
-              if matrix[i,j]!=0:
-                lband = max(lband, i-j)
-            for j in range(i,n):
-              if matrix[i,j]!=0:
-                uband = max(uband, j-i)
-          if uband==n-1:
-            uband=n
-          if lband==n-1:
-            lband=n
-#          uband = min(uband+1, matrix.shape[0])
-#          lband = min(lband+1, matrix.shape[0]) # TODO: check this problematic definition of the bandwith (it('s the only to have uband=lband=n for a dense matrix...
-          if bDebug:
-            print(f'uband={uband}, lband={lband}')
-          return (lband, uband)
       if mlmas is None:
         mlmas, mumas = bandwith( mass_matrix ) # determine bandwith
       imas = 1
 
     def mass_fcn(n, am_in, lmas, rpar, ipar):
-#        am = am_in # untrasnformed case
         am = np.ctypeslib.as_array(am_in, shape=(lmas[0], n[0]))
+        #am = np.reshape(am_mapped, (lmas[0],n[0]), order='F')
+        #print('am reshaped=\n', am)
+        
         if bDebug:
           print('Calling mass matrix function')
           print('lmas=',lmas[0])
           print('n=',n[0])
-#        for i in range(lmas[0]):
-#          print(f'am[{i}]=',am[i])
+
         assert n[0]==neq
+        am[:] = 5555555.
+        
+        
+        ## To study the transposition issues from Fortan to C
+        #ii=0
+        #for i in range(n[0]):
+        #  for j in range(lmas[0]):
+        #    ii+=1
+        #    am[i][j] = ii
+        #print('am=\n',am)
+        #return
+        
         if mlmas==neq and mumas==neq: # full matrix
-          if bDebug: print(' mass matrix is dense')
-          for i in range(n[0]): # transform back from Numpy #TODO: faster way ?
-            for j in range(n[0]):
-              am[i][j] = mass_matrix[i,j]
-          # for debug checks
-          mass_np = np.ctypeslib.as_array(am, shape=(lmas[0], n[0])) # transform input into a Numpy array
-          reconstructed_mass_matrix = np.zeros((neq,neq))
-          if bDebug: print('mass_np=', mass_np)
-        else: # sparse matrix
-          if bDebug: print(' mass matrix is not dense')
-          for diag_num in range(-mljac,mujac+1,1):
-              print(diag_num)
-              current_diag = np.diag(mass_matrix, k=diag_num)
-              nstart=abs(diag_num)
-              print(nstart, '-->', n[0]-nstart)
-              for j in range(nstart,n[0]-nstart+1):
-                  print('  ',j)
-                  am[diag_num+mljac][j] = current_diag[j]
+          am[:] = mass_matrix[:]
 
-      #     for i in range(n[0]):
-      #       print(f'i={i}')
-      #       for j in range(max(0,i-mlmas), min(neq,i+mumas)+1):
-      #         #print(f' j={j}')
-      #         i2 = i-j+mumas#+1
-      #         print(f' i-j+mumas+1=', i2)
-      #     #    print('   mass_matrix[i,j]=',mass_matrix[i,j])
-      #    #     print('   am[i-j+mumas+1][j]=',am[i2][j])
-      #         am[i2][j] = mass_matrix[i,j]
-      #   #      print('-> am[i-j+mumas+1][j]=',am[i2][j])
-      #     if bDebug: print('after copy')
-      # #    for i in range(lmas[0]):
-      #  #     print(f'   am[{i}]=',am[i])
+        else: # banded matrix
+          mbdiag = mumas+1
+  
+          if 0:
+              for i in range(lmas[0]):
+                for j in range(n[0]):
+                  print('i=',i+j-mbdiag+1, 'j=',j)
+                  am[i][j] = mass_matrix[i+j-mbdiag+1,j]
+          
+          else:
+              for diag_num in range(-mlmas,mumas+1,1):
+                  current_diag = np.diag(mass_matrix, k=diag_num)
+                  print('diag_offset=', diag_num)
+                  print('  diag.size=',current_diag.size)
+                  if diag_num<0: # lower diagonals
+                    am[mbdiag - 1 - diag_num][:diag_num] = current_diag
+                  elif diag_num>0: # upper diagonals
+                    am[mbdiag - 1 - diag_num][diag_num:] = current_diag
+                  else: # main diagonal
+                    am[mbdiag - 1 - diag_num][:] = current_diag
+          if 0:
+              # DEBUG
+              print(mass_matrix)
+              for i in range(-mlmas,mumas+1):
+                print('diag',i)
+                print(am[i+mlmas][:])
 
-          # for debug checks
-          mass_np = np.ctypeslib.as_array(am, shape=(lmas[0], n[0])) # transform input into a Numpy array
-          # reconstructed_mass_matrix = np.zeros((neq,neq))
-          if bDebug: print('mass_np=', mass_np)
-          import pdb; pdb.set_trace()
-        #TODO:check diagonals are equal
-        #  for i in range(n[0]):
-        #    for j in range(max(0,i-mlmas), min(neq,i+mumas)):
-        #      reconstructed_mass_matrix[i,j] = mass_np[i-j+mumas,j][j]
-        #  assert np.allclose(reconstructed_mass_matrix, mass_matrix, rtol=1e-13, atol=1e-13), 'mass matrix is wrongly transcribed'
-
-    lmas=mlmas+mumas+1
-    mass_fcn(n=[y0.size], am_in=np.zeros((lmas,y0.size)), lmas=[lmas], rpar=None, ipar=None)
-    return
-
+              for i in range(mlmas+mumas+1):
+                print(f'AM({i+1},:) = ', am[i][:])
+        
+        # to correct an issue with the fact that is array is not ordered in the same manner as in fortran
+        vector = np.reshape(am, (n[0]*lmas[0]), order='F')
+        vector = vector.reshape((n[0],lmas[0]), order='F').T          
+        am[:] = vector[:]
+        return
+                  
     def solout(nr, told, t, y, cont, lrc, n, rpar, ipar, irtrn):
         if bPrint: print(f'solout called after step tn={told[0]} to tnp1={t[0]}')
         tsol.append(t[0])
@@ -192,7 +177,7 @@ def radau5(tini, tend, y0, fun,
                          ct.c_int, ct.c_int, ct.c_int]
     c_radau5.restype = None
 
-    # create callabel interfaces to the Python functions (time derivatives, jacobian, solution export, mass matrix)
+    # create callable interfaces to the Python functions (time derivatives, jacobian, solution export, mass matrix)
     callable_fcn = fcn_type(fcn)
     callable_mass_fcn = mas_fcn_type(mass_fcn)
     callable_solout = solout_type(solout)
@@ -336,7 +321,8 @@ def radau5(tini, tend, y0, fun,
     out.nlinsolves_err  = info[8]  # number of linear solves for error estimation
     IDID       = info[9] # exit code
 
-    print('info=',info)
+    if bDebug:
+        print('info=',info)
 
     out.success = (IDID > 0)
     if IDID== 1:  out.msg='COMPUTATION SUCCESSFUL'

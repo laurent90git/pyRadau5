@@ -117,7 +117,7 @@ C                    AS FULL MATRIX LIKE
 C                         AM(I,J) = M(I,J)
 C                    ELSE, THE MATRIX IS TAKEN AS BANDED AND STORED
 C                    DIAGONAL-WISE AS
-C                         AM(I-J+MUMAS+1,J) = M(I,J).
+C                         AM(I-J+MUMAS+1,J) = M(I,J)
 C
 C     IMAS       GIVES INFORMATION ON THE MASS-MATRIX:
 C                    IMAS=0: M IS SUPPOSED TO BE THE IDENTITY
@@ -760,7 +760,21 @@ C -------- CHECK THE INDEX OF THE PROBLEM -----
       !INDEX2=NIND2.NE.0
       !INDEX3=NIND3.NE.0
 C ------- COMPUTE MASS MATRIX FOR IMPLICIT CASE ----------
-      IF (IMPLCT) CALL MAS(NM1,FMAS,LDMAS,RPAR,IPAR)
+      IF (IMPLCT) then
+        CALL MAS(NM1,FMAS,LDMAS,RPAR,IPAR)
+       ! print*, 'fresh mass matrix :)'
+       ! DO I=1,min(N,MUMAS+MLMAS+1)
+       !     print*, ' i=',i
+       !     print*, '   FMAS(I,:)=', FMAS(I,:)
+       ! END DO
+       ! DO j=1,N
+       !     print*, ' j=',j
+       !     print*, '   FMAS(:,j)=', FMAS(:,j)
+       ! END DO
+        
+        !stop 'debug'
+        
+      endif
 C ---------- CONSTANTS ---------
       SQ6=DSQRT(6.D0)
       C1=(4.D0-SQ6)/10.D0
@@ -903,6 +917,7 @@ C --- COMPUTE JACOBIAN MATRIX ANALYTICALLY
       CALHES=.TRUE.
   20  CONTINUE
 C --- COMPUTE THE MATRICES E1 AND E2 AND THEIR DECOMPOSITIONS
+      ! they ahve the form fac1*M - Jac
       FAC1=U1/H
       ALPHN=ALPH/H
       BETAN=BETA/H

@@ -90,14 +90,22 @@ C -----------------------------------------------------------
 C
    3  CONTINUE
 C ---  B IS A BANDED MATRIX, JACOBIAN A FULL MATRIX
+      !print*, 'MUMAS=',MUMAS,' MLMAS=',MLMAS, ' MBDIAG=', MBDIAG
+      !DO I=1,MUMAS+MLMAS+1
+      !  print*, ' i=',i
+      !  print*, '   FMAS(I,:)=', FMAS(I,:)
+      !END DO
       DO J=1,N
          DO I=1,N
             E1(I,J)=-FJAC(I,J)
          END DO
+!      !   print*, 'j=',j
          DO I=MAX(1,J-MUMAS),MIN(N,J+MLMAS)
+!       print*, '   i=',i, ', i2=', I-J+MBDIAG, ', M(i,j)=',FMAS(I-J+MBDIAG,J)
             E1(I,J)=E1(I,J)+FAC1*FMAS(I-J+MBDIAG,J)
          END DO
       END DO
+!    !  stop 'test'
       CALL DEC (N,LDE1,E1,IP1,IER)
       RETURN
 C
