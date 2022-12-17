@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 
 #%% Setup the model based on the chosen formulation
-def generateSytem(chosen_index, theta_0=np.pi/2, theta_dot0=0., r0=1., m=1, g=9.81):
+def generateSystem(chosen_index, theta_0=np.pi/2, theta_dot0=0., r0=1., m=1, g=9.81):
     """ Generates the DAE function representing the pendulum with the desired
     index (0 to 3).
         Inputs:
@@ -165,7 +165,7 @@ if __name__=='__main__':
     m=1.   # mass
     g=9.81 # gravitational acceleration
 
-    dae_fun, jac_dae, mass, Xini, var_index= generateSytem(chosen_index, theta_0, theta_dot0, r0, m, g)
+    dae_fun, jac_dae, mass, Xini, var_index= generateSystem(chosen_index, theta_0, theta_dot0, r0, m, g)
     n = Xini.size
     # jac_dae = None
     print(f'Solving the index {chosen_index} formulation')

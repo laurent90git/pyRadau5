@@ -1211,7 +1211,7 @@ C       --- PREDICTIVE CONTROLLER OF GUSTAFSSON
          ELSE
             QT=HNEW/H 
             HHFAC=H
-            IF (THETA.LE.THET.AND.QT.GE.QUOT1.AND.QT.LE.QUOT2) GOTO 30
+            IF (THETA.LE.THET .AND. QT.GE.QUOT1 .AND. QT.LE.QUOT2) GOTO 30
             H=HNEW 
          END IF
          HHFAC=H
