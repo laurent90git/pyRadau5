@@ -1,4 +1,4 @@
-from integration.rock_radau import integration
+from source import integration
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.sparse

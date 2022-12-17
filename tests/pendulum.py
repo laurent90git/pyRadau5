@@ -1,4 +1,4 @@
-from integration.rock_radau import integration
+from pyRadau5 import integration
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -255,10 +255,8 @@ if __name__=='__main__':
 
 
     #%% Solve the DAE with Scipy's modified Radau
-    import sys
-    sys.path.append('/stck/lfrancoi/GIT/DAE-Scipy')
-    from radauDAE import RadauDAE
-    from radauDAE import solve_ivp_custom as solve_ivp
+    from scipyDAE.radauDAE import RadauDAE
+    from scipyDAE.radauDAE import solve_ivp_custom as solve_ivp
     solpy = solve_ivp(fun=dae_fun, t_span=(0., tf), y0=Xini, max_step=tf,
                     rtol=rtol, atol=atol, jac=jac_dae, jac_sparsity=None,
                     method=RadauDAE,

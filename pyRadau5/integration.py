@@ -3,6 +3,13 @@
 import numpy as np
 import ctypes as ct
 
+# TODO: improve the DLL loading process
+import os
+current_dir = os.path.dirname(os.path.realpath(__file__))
+subpath = "fortran/lib_radau_rock.so"
+sPath = os.path.join(current_dir, subpath)
+c_integration = ct.CDLL(sPath)
+
 # try:
 #   from scipy.linalg import bandwith
 # except ImportError:
@@ -43,16 +50,9 @@ def radau5(tini, tend, y0, fun,
     bReport=False):
     """ TODO    """
 
-    import os
-    current_dir = os.path.dirname(os.path.realpath(__file__))
-    subpath = "mylib/lib_radau_rock.so"
-    sPath = os.path.join(current_dir, subpath)
-    c_integration = ct.CDLL(sPath)
-
     neq = y0.size # number of components
     tsol=[]
     ysol=[]
-
 
     def fcn(n, t, y, ydot, rpar, ipar):
         y_np = np.ctypeslib.as_array(y, shape=(n[0],)) # transform input into a Numpy array
