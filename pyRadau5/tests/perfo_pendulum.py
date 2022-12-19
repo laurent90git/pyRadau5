@@ -57,7 +57,7 @@ jacobianRecomputeFactor=-1 #0.001 #0.001
 newton_tol=None # relative newton tolerance with respect to rtol
 first_step=tf/2 #6
 step_evo_factor_bounds=(0.2,8.0)
-rtol=1e-6; atol=rtol # relative and absolute tolerances for time adaptation
+rtol=1e-8; atol=rtol # relative and absolute tolerances for time adaptation
 
 # Fortran specific
 deadzone=(0.999,1.0001)
@@ -341,9 +341,9 @@ for key in ['x','y','vx','vy', 'lbda']:
 
     ref_value = refval[key]
     current_value = sol[key]
-    
+
     rel_err = np.abs(ref_value - current_value) / (1e-5 + np.abs(ref_value))
-    
+
     plt.semilogy(sol['t'], rel_err, label=name)
   plt.grid()
   plt.legend()
