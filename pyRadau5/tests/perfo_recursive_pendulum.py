@@ -12,30 +12,38 @@ from scipy.integrate import solve_ivp
 from numpy.testing import (assert_, assert_allclose, assert_equal, assert_no_warnings, suppress_warnings)
 import matplotlib.pyplot as plt
 import numpy as np
-from pendulum import generateSystem, computeAngle
+from scipyDAE.tests.recursive_pendulum import generateSystem
 from pyRadau5 import integration
 import time as pytime
 
+def computeAngle(x,y):
+  theta = np.arctan(-x/y)
+  I = np.where(y>0)[0]
+  theta[I] += np.sign(x[I])*np.pi
+  return theta
+
+# Test the pendulum
+from scipy.integrate import solve_ivp
+from numpy.testing import (assert_, assert_allclose,
+                       assert_equal, assert_no_warnings, suppress_warnings)
+import matplotlib.pyplot as plt
+
+from scipyDAE.radauDAE import RadauDAE
+# from radauDAE_subjac import RadauDAE
 
 ###### Parameters to play with
+n = 50
+initial_angle = np.pi/4
 chosen_index = 3 # The index of the DAE formulation
-tf = 5.0 #10.0        # final time (one oscillation is ~2s long)
-# rtol=1e-3; atol=rtol # relative and absolute tolerances for time adaptation
+rtol=1e-3; atol=rtol # relative and absolute tolerances for time adaptation
 bPrint=False # if True, additional printouts from Radau during the computation
-bDebug=False # study condition number of the iteration matrix
 
+dae_fun, jac_dae, sparsity, mass, Xini, var_index, T_th, m = \
+    generateSystem(n, initial_angle, chosen_index)
 
-## Physical parameters for the pendulum
-theta_0=0#np.pi/2 # initial angle
-theta_dot0=-3. # initial angular velocity
-r0=3.  # rod length
-m=1.   # mass
-g=9.81 # gravitational acceleration
-
-dae_fun, jac_dae, mass, Xini, var_index= generateSystem(chosen_index=chosen_index, theta_0=theta_0, theta_dot0=theta_dot0, r0=r0, m=m, g=g)
-n = Xini.size
+tf = 2*T_th # simulate 2 periods
 # jac_dae = None
-print(f'Solving the index {chosen_index} formulation')
+bandwith = integration.bandwith(sparsity)
 
 # analyse comaprative autour d'un point intriguant
 # tf = 0.1
@@ -48,14 +56,18 @@ bUsePredictiveController=True
 safetyFactor=0.9
 max_bad_ite=2
 bAlwaysApply2ndEstimate=True
-jacobianRecomputeFactor=-1 #0.001 #0.001
+jacobianRecomputeFactor=0.001 #0.001
 newton_tol=None # relative newton tolerance with respect to rtol
 first_step=tf/2 #6
 step_evo_factor_bounds=(0.2,8.0)
 rtol=1e-8; atol=rtol # relative and absolute tolerances for time adaptation
 
+
+
 # Fortran specific
 deadzone=(0.999,1.0001)
+bShowProgress=True
+bReport=True
 
 # Scipy Radau specific
 bUsePredictiveNewtonStoppingCriterion = True
@@ -64,12 +76,13 @@ scale_residuals = True
 scale_newton_norm = True
 scale_error = True
 factor_on_non_convergence = 0.5
+bDebug=False
 
 #%% Solve the DAE
 t_start = pytime.time()
 solfort = integration.radau5(tini=0., tend=tf, y0=Xini,
                     fun=dae_fun,
-                    mljac=n, mujac=n,
+                    mljac=bandwith[0], mujac=bandwith[1],
                     mlmas=0, mumas=0,
                     rtol=rtol, atol=atol,
                     t_eval=None,
@@ -82,7 +95,7 @@ solfort = integration.radau5(tini=0., tend=tf, y0=Xini,
                     jacobianRecomputeFactor=jacobianRecomputeFactor, newton_tol=newton_tol,
                     mass_matrix=mass, var_index=var_index,
                     bPrint=bPrint, nMaxBadIte=max_bad_ite, bAlwaysApply2ndEstimate=bAlwaysApply2ndEstimate,
-                    bReport=True)
+                    bReport=bReport, bShowProgress=True)
 t_end = pytime.time()
 sol=solfort
 if solfort.success:
@@ -98,59 +111,60 @@ print('CPU time = {} s'.format(t_end-t_start))
 
 # raise Exception('stop')
 # recover the time history of each variable
-x,y,vx,vy,lbda = sol.y
-T = lbda * np.sqrt(x**2+y**2)
-theta = computeAngle(x,y)
-dicfort = {'t':sol.t,
-           'x':x,
-           'y':y,
-           'vx':vx,
-           'vy':vy,
-           'theta':theta,
-           'lbda': lbda,
-           'T': T}
+# x,y,vx,vy,lbda = sol.y
+# T = lbda * np.sqrt(x**2+y**2)
+# theta = computeAngle(x,y)
+# dicfort = {'t':sol.t,
+#            'x':x,
+#            'y':y,
+#            'vx':vx,
+#            'vy':vy,
+#            'theta':theta,
+#            'lbda': lbda,
+#            'T': T}
 
 #%% Plot report
-print('codes = ', np.unique(sol.reports['code']))
+if bReport:
+    print('codes = ', np.unique(sol.reports['code']))
 
-codes, names =  zip(*
-                ((0, 'accepted'),
-                 (1, 'rejected'),
-                 (2, 'refactor_from_newton'),
-                 (3, 'update_from_newton'),
-                 (4, 'singular'),
-                 (5, 'badconvergence'),
-                 (-10, 'jacobian_update'),
-                 (-11, 'refactor'),
-                 ))
-Idict = {}
-for key, val in zip(names, codes):
-  Idict[key] = np.where(sol.reports["code"]==val)[0]
-Idict['failed'] = np.where( np.logical_or(sol.reports["code"]==4, sol.reports["code"]==5))[0]
+    codes, names =  zip(*
+                    ((0, 'accepted'),
+                     (1, 'rejected'),
+                     (2, 'refactor_from_newton'),
+                     (3, 'update_from_newton'),
+                     (4, 'singular'),
+                     (5, 'badconvergence'),
+                     (-10, 'jacobian_update'),
+                     (-11, 'refactor'),
+                     ))
+    Idict = {}
+    for key, val in zip(names, codes):
+      Idict[key] = np.where(sol.reports["code"]==val)[0]
+    Idict['failed'] = np.where( np.logical_or(sol.reports["code"]==4, sol.reports["code"]==5))[0]
 
-plt.figure()
-plt.plot(sol.t[:-1], np.diff(sol.t), label=r'$\Delta t$')
-# plt.plot(sol.reports['t'][Idict['accepted']], sol.reports['dt'][Idict['accepted']], linestyle='--', label='dt2')
+    plt.figure()
+    plt.plot(sol.t[:-1], np.diff(sol.t), label=r'$\Delta t$')
+    # plt.plot(sol.reports['t'][Idict['accepted']], sol.reports['dt'][Idict['accepted']], linestyle='--', label='dt2')
 
-# plt.plot(sol.reports['t'][Idict['refactor']],        sol.reports['dt'][Idict['refactor']], linestyle='', marker='o', color='tab:green', label='refactor', markersize=15, alpha=0.3)
-# plt.plot(sol.reports['t'][Idict['jacobian_update']], sol.reports['dt'][Idict['jacobian_update']], linestyle='', marker='o', color='tab:green', label='jacobian update', alpha=1)
+    # plt.plot(sol.reports['t'][Idict['refactor']],        sol.reports['dt'][Idict['refactor']], linestyle='', marker='o', color='tab:green', label='refactor', markersize=15, alpha=0.3)
+    # plt.plot(sol.reports['t'][Idict['jacobian_update']], sol.reports['dt'][Idict['jacobian_update']], linestyle='', marker='o', color='tab:green', label='jacobian update', alpha=1)
 
-plt.plot(sol.reports['t'][Idict['jacobian_update']], sol.reports['dt'][Idict['jacobian_update']], linestyle='', marker='o', color='tab:green', label='jacobian update', markersize=15, alpha=0.3)
-plt.plot(sol.reports['t'][Idict['failed']],          sol.reports['dt'][Idict['failed']], linestyle='', marker='o', color='tab:red', label='failed')
-plt.plot(sol.reports['t'][Idict['rejected']],        sol.reports['dt'][Idict['rejected']], linestyle='', marker='o', color='tab:purple', label='rejected')
-plt.legend()
-plt.yscale('log')
+    plt.plot(sol.reports['t'][Idict['jacobian_update']], sol.reports['dt'][Idict['jacobian_update']], linestyle='', marker='o', color='tab:green', label='jacobian update', markersize=15, alpha=0.3)
+    plt.plot(sol.reports['t'][Idict['failed']],          sol.reports['dt'][Idict['failed']], linestyle='', marker='o', color='tab:red', label='failed')
+    plt.plot(sol.reports['t'][Idict['rejected']],        sol.reports['dt'][Idict['rejected']], linestyle='', marker='o', color='tab:purple', label='rejected')
+    plt.legend()
+    plt.yscale('log')
 
-ax2 = plt.gca().twinx()
-ax2.plot(sol.reports['t'][Idict['accepted']], sol.reports['newton_iterations'][Idict['accepted']], label='all', color='tab:green', linestyle='--')
-ax2.plot(sol.reports['t'][Idict['accepted']], sol.reports['bad_iterations'][Idict['accepted']], label='bad', color='tab:red', linestyle='--')
-ax2.legend()
-ax2.set_ylabel('Newton iterations')
-plt.grid()
-plt.legend()
-plt.xlabel('t (s)')
-plt.ylabel('dt (s)')
-plt.title('Radau5 analysis')
+    ax2 = plt.gca().twinx()
+    ax2.plot(sol.reports['t'][Idict['accepted']], sol.reports['newton_iterations'][Idict['accepted']], label='all', color='tab:green', linestyle='--')
+    ax2.plot(sol.reports['t'][Idict['accepted']], sol.reports['bad_iterations'][Idict['accepted']], label='bad', color='tab:red', linestyle='--')
+    ax2.legend()
+    ax2.set_ylabel('Newton iterations')
+    plt.grid()
+    plt.legend()
+    plt.xlabel('t (s)')
+    plt.ylabel('dt (s)')
+    plt.title('Radau5 analysis')
 
 #%% Solve the DAE with Scipy's modified Radau
 from scipyDAE.radauDAE import RadauDAE
@@ -173,7 +187,7 @@ solpy = solve_ivp(fun=dae_fun, t_span=(0., tf), y0=Xini, max_step=tf,
                 bAlwaysApply2ndEstimate = bAlwaysApply2ndEstimate,
                 max_bad_ite=max_bad_ite,
                 bUsePredictiveNewtonStoppingCriterion=bUsePredictiveNewtonStoppingCriterion,
-                bDebug=bDebug)
+                bDebug=bDebug, bPrintProgress=True)
 t_end = pytime.time()
 sol = solpy
 if sol.success:

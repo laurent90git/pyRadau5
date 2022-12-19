@@ -2,6 +2,11 @@ from pyRadau5 import integration
 import numpy as np
 import matplotlib.pyplot as plt
 
+def computeAngle(x,y):
+  theta = np.arctan(-x/y)
+  I = np.where(y>0)[0]
+  theta[I] += np.sign(x[I])*np.pi
+  return theta
 
 #%% Setup the model based on the chosen formulation
 def generateSystem(chosen_index, theta_0=np.pi/2, theta_dot0=0., r0=1., m=1, g=9.81):

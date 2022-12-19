@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import ctypes as ct
+import scipy.sparse
 
 # TODO: improve the DLL loading process
 import os
@@ -29,14 +30,32 @@ def bandwith(matrix):
     if lband==n-1:
       lband=n
     return (lband, uband)
-    
+
 
 class radau_result:
     def __init__(self, y, t):
         self.y = y
         self.t = t
 
+from tqdm import tqdm
 
+class progress_wrapper():
+    def __init__(self):
+        self.progress=0
+        self.pbar = tqdm(range(100))
+        # self.nupdate = 0
+        self.update(0)
+
+    def update(self, progress):
+        gap = np.floor(progress) - np.floor(self.progress)
+        if gap > 1: # update every one percent
+            self.pbar.update(gap)#int(np.floor(progress)))
+            self.pbar.refresh()
+            self.progress = progress
+
+    def finalise(self):
+        if self.progress<100:
+           self.update(100)
 
 def radau5(tini, tend, y0, fun,
     mujac, mljac,
@@ -47,7 +66,7 @@ def radau5(tini, tend, y0, fun,
     jacobianRecomputeFactor=None, newton_tol=None, bTryToUseHessenberg=False,
     deadzone=None, step_evo_factor_bounds=None, safetyFactor=None,
     bPrint=False, bDebug=False, nMaxBadIte=0, bAlwaysApply2ndEstimate=False,
-    bReport=False):
+    bReport=False, bShowProgress=False):
     """ TODO    """
 
     neq = y0.size # number of components
@@ -73,7 +92,7 @@ def radau5(tini, tend, y0, fun,
         am = np.ctypeslib.as_array(am_in, shape=(lmas[0], n[0]))
         #am = np.reshape(am_mapped, (lmas[0],n[0]), order='F')
         #print('am reshaped=\n', am)
-        
+
         if bDebug:
           print('Calling mass matrix function')
           print('lmas=',lmas[0])
@@ -81,8 +100,8 @@ def radau5(tini, tend, y0, fun,
 
         assert n[0]==neq
         am[:] = 5555555.
-        
-        
+
+
         ## To study the transposition issues from Fortan to C
         #ii=0
         #for i in range(n[0]):
@@ -91,22 +110,26 @@ def radau5(tini, tend, y0, fun,
         #    am[i][j] = ii
         #print('am=\n',am)
         #return
-        
+
         if mlmas==neq and mumas==neq: # full matrix
           am[:] = mass_matrix[:]
 
         else: # banded matrix
           mbdiag = mumas+1
-  
+
           if 0:
               for i in range(lmas[0]):
                 for j in range(n[0]):
                   print('i=',i+j-mbdiag+1, 'j=',j)
                   am[i][j] = mass_matrix[i+j-mbdiag+1,j]
-          
+
           else:
+              isSparse = scipy.sparse.issparse(mass_matrix)
               for diag_num in range(-mlmas,mumas+1,1):
-                  current_diag = np.diag(mass_matrix, k=diag_num)
+                  if isSparse:
+                      current_diag = mass_matrix.diagonal(k=diag_num)
+                  else:
+                      current_diag = np.diag(mass_matrix, k=diag_num)
                   #print('diag_offset=', diag_num)
                   #print('  diag.size=',current_diag.size)
                   if diag_num<0: # lower diagonals
@@ -124,18 +147,24 @@ def radau5(tini, tend, y0, fun,
 
               for i in range(mlmas+mumas+1):
                 print(f'AM({i+1},:) = ', am[i][:])
-        
+
         # to correct an issue with the fact that is array is not ordered in the same manner as in fortran
         #if 0:
         #    vector = np.reshape(am, (n[0]*lmas[0]), order='F')
-        #    vector = vector.reshape((n[0],lmas[0]), order='F').T          
+        #    vector = vector.reshape((n[0],lmas[0]), order='F').T
         #    am[:] = vector[:]
         #else:
         am[:] = np.reshape(am, (n[0], lmas[0]), order='F').T
         return
-                  
+
+    if bShowProgress:  progressBar = progress_wrapper()
+
+    last_progress=0
     def solout(nr, told, t, y, cont, lrc, n, rpar, ipar, irtrn):
         if bPrint: print(f'solout called after step tn={told[0]} to tnp1={t[0]}')
+        if bShowProgress:
+            progressBar.update( (told[0]-tini)/(tend-tini)*100 )
+
         tsol.append(t[0])
         y_np = np.ctypeslib.as_array(y, shape=(n[0],)).copy() # transform input into a Numpy array
         ysol.append(y_np)
@@ -301,6 +330,9 @@ def radau5(tini, tend, y0, fun,
              iwork, work,
              iout, info,
              bPrint, nMaxBadIte, nAlwaysUse2ndErrorEstimate)
+
+    if bShowProgress:
+        progressBar.finalise()
 
     ################
     ##  Finalise  ##
