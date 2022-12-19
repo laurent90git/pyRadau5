@@ -109,7 +109,7 @@ print("{} fev, {} jev, {} LUdec, {} linsolves, {} linsolves for error estimation
       sol.nfev, sol.njev, sol.ndec, sol.nsol, sol.nlinsolves_err))
 print('CPU time = {} s'.format(t_end-t_start))
 
-# raise Exception('stop')
+raise Exception('stop')
 # recover the time history of each variable
 # x,y,vx,vy,lbda = sol.y
 # T = lbda * np.sqrt(x**2+y**2)
@@ -171,6 +171,7 @@ from scipyDAE.radauDAE import RadauDAE
 from scipyDAE.radauDAE import solve_ivp_custom as solve_ivp
 t_start = pytime.time()
 solpy = solve_ivp(fun=dae_fun, t_span=(0., tf), y0=Xini, max_step=tf,
+                # rtol=rtol, atol=atol, jac=None, jac_sparsity=sparsity,
                 rtol=rtol, atol=atol, jac=jac_dae, jac_sparsity=None,
                 method=RadauDAE,
                 first_step=min(tf, first_step), dense_output=True,
@@ -213,6 +214,14 @@ dicpy   = {'t':sol.t,
            'lbda': lbda,
            'T': T}
 
+#%%
+plt.figure()
+plt.semilogy(solfort.t[:-1], np.diff(solfort.t), label='fortran')
+plt.semilogy(solpy.t[:-1], np.diff(solpy.t), label='py')
+plt.grid()
+plt.xlabel('t (s)')
+plt.ylabel('dt (s)')
+plt.legend()
 #%% Compute true solution (ODE on the angle in polar coordinates)
 def fun_ode(t,X):
   theta=X[0]; theta_dot = X[1]
