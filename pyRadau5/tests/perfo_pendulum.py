@@ -19,7 +19,7 @@ import time as pytime
 
 ###### Parameters to play with
 chosen_index = 3 # The index of the DAE formulation
-tf = 5.0 #10.0        # final time (one oscillation is ~2s long)
+tf = 15.0 #10.0        # final time (one oscillation is ~2s long)
 # rtol=1e-3; atol=rtol # relative and absolute tolerances for time adaptation
 bPrint=False # if True, additional printouts from Radau during the computation
 bDebug=False # study condition number of the iteration matrix
@@ -165,6 +165,8 @@ plt.legend()
 plt.xlabel('t (s)')
 plt.ylabel('error')
 plt.title('Radau5 error estimates')
+
+print('TODO: comapre estimate of the Python version on this same problem')
 
 
 #%% Solve the DAE with Scipy's modified Radau
