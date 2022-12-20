@@ -163,7 +163,7 @@ plt.axhline(1.0, linestyle='--', label=None, color=[0,0,0])
 plt.grid()
 plt.legend()
 plt.xlabel('t (s)')
-plt.ylabel('dt (s)')
+plt.ylabel('error')
 plt.title('Radau5 error estimates')
 
 
