@@ -152,6 +152,21 @@ plt.xlabel('t (s)')
 plt.ylabel('dt (s)')
 plt.title('Radau5 analysis')
 
+#%%
+plt.figure()
+plt.semilogy(sol.reports['t'][Idict['accepted']], sol.reports['err1'][Idict['accepted']], label='err1', color='tab:green', linestyle='-')
+plt.semilogy(sol.reports['t'][Idict['accepted']], sol.reports['err2'][Idict['accepted']], label='err2', color='tab:orange', linestyle='-')
+
+plt.semilogy(sol.reports['t'][Idict['rejected']], sol.reports['err1'][Idict['rejected']], label='rejected err1', color='tab:green', linestyle='', marker='.')
+plt.semilogy(sol.reports['t'][Idict['rejected']], sol.reports['err2'][Idict['rejected']], label='rejected err2', color='tab:orange', linestyle='', marker='.')
+plt.axhline(1.0, linestyle='--', label=None, color=[0,0,0])
+plt.grid()
+plt.legend()
+plt.xlabel('t (s)')
+plt.ylabel('dt (s)')
+plt.title('Radau5 error estimates')
+
+
 #%% Solve the DAE with Scipy's modified Radau
 from scipyDAE.radauDAE import RadauDAE
 from scipyDAE.radauDAE import solve_ivp_custom as solve_ivp

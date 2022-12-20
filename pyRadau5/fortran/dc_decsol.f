@@ -1302,7 +1302,8 @@ C
      &          H,DD1,DD2,DD3,FCN,NFCN,Y0,Y,IJOB,X,M1,M2,NM1,
      &          E1,LDE1,Z1,Z2,Z3,CONT,F1,F2,IP1,IPHES,SCAL,ERR,
      &          FIRST,REJECT,FAC1,RPAR,IPAR,
-     &          nLinSolveErr, bPrint, bAlwaysUse2ndErrorEstimate)
+     &          nLinSolveErr, bPrint, bAlwaysUse2ndErrorEstimate,
+     &          ERR1, ERR2)
       IMPLICIT DOUBLE PRECISION (A-H,O-Z)
       DIMENSION FJAC(LDJAC,N),FMAS(LDMAS,NM1),E1(LDE1,NM1),IP1(NM1),
      &     SCAL(N),IPHES(N),Z1(N),Z2(N),Z3(N),F1(N),F2(N),Y0(N),Y(N)
@@ -1314,6 +1315,8 @@ C
       HEE2=DD2/H
       HEE3=DD3/H
       nLinSolveErr = 0
+      ERR1 = -1.0
+      ERR2 = -1.0
       
       GOTO (1,2,3,4,5,6,7,55,55,55,11,12,13,14,15), IJOB
 C
@@ -1535,6 +1538,7 @@ C
          ERR=ERR+(CONT(I)/SCAL(I))**2
       END DO
       ERR=MAX(SQRT(ERR/N),1.D-10)
+      ERR1 = ERR
       if (bPrint) print*, '  1st error estimate=', ERR
       
       IF (ERR.LT.1.D0) RETURN
@@ -1627,6 +1631,7 @@ C ------- Compute 2nd error estimate
              ERR=ERR+(CONT(I)/SCAL(I))**2
           END DO
           ERR=MAX(SQRT(ERR/N),1.D-10)
+          ERR2 = ERR
           if (bPrint) print*, '  2nd error estimate=', ERR
        END IF
        RETURN

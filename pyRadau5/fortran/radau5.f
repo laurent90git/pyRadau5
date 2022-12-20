@@ -736,7 +736,7 @@ C ----------------------------------------------------------
       LOGICAL LAST, PRED, bHighIndex
       EXTERNAL FCN, REPORTFUN
       LOGICAL bPrint, bAlwaysUse2ndErrorEstimate
-      DOUBLE PRECISION RES_NORM, RES_NORM_OLD, THRES
+      DOUBLE PRECISION RES_NORM, RES_NORM_OLD, THRES, ERR1, ERR2
       INTEGER nMaxBadIte, NBAD, var_index(N), var_exp(N), NFAILED, nLinSolveErr, new_nLinSolveErr
                   
 C *** *** *** *** *** *** ***
@@ -865,7 +865,7 @@ C  COMPUTATION OF THE JACOBIAN
 C *** *** *** *** *** *** ***
       NJAC=NJAC+1
       IF (bPrint) print*, 'Updating Jacobian' 
-      if (bReport) CALL REPORTFUN(X,H,-10,-1,-1) ! update jacobian
+      if (bReport) CALL REPORTFUN(X,H,-10,-1,-1,-1.0,-1.0) ! update jacobian
       IF (IJAC.EQ.0) THEN
 C --- COMPUTE JACOBIAN MATRIX NUMERICALLY
          IF (BANDED) THEN
@@ -922,7 +922,7 @@ C --- COMPUTE THE MATRICES E1 AND E2 AND THEIR DECOMPOSITIONS
       ALPHN=ALPH/H
       BETAN=BETA/H
       IF (bPrint) print*, 'Decomposing matrices'
-      if (bReport) CALL REPORTFUN(X,H,-11,-1,-1) ! refactor jacobian
+      if (bReport) CALL REPORTFUN(X,H,-11,-1,-1,-1.0,-1.0) ! refactor jacobian
       CALL DECOMR(N,FJAC,LDJAC,FMAS,LDMAS,MLMAS,MUMAS,
      &            M1,M2,NM1,FAC1,E1,LDE1,IP1,IER,IJOB,CALHES,IPHES)
       IF (IER.NE.0) GOTO 78
@@ -989,6 +989,8 @@ C *** *** *** *** *** *** ***
             F3(I)=TI31*Z1I+TI32*Z2I+TI33*Z3I
          END DO
       END IF
+      ERR1=0
+      ERR2=0
 C *** *** *** *** *** *** ***
 C  LOOP FOR THE SIMPLIFIED NEWTON ITERATION
 C *** *** *** *** *** *** ***
@@ -1076,7 +1078,7 @@ C *** *** *** *** *** *** ***
                                 if (nMaxBadIte>0) print*, '    Too many bad iterations'
                                 print*, '    Newton will not converge to the desired precision'
                              endif                                
-                             if (bReport) CALL REPORTFUN(X,H,5,NEWT,NBAD) ! poor convergence
+                             if (bReport) CALL REPORTFUN(X,H,5,NEWT,NBAD,-1.0,-1.0) ! poor convergence
                              QNEWT=DMAX1(1.0D-4,DMIN1(20.0D0,DYTH))
                              HHFAC=.8D0*QNEWT**(-1.0D0/(4.0D0+NIT-1-NEWT))
                              H=HHFAC*H
@@ -1131,7 +1133,8 @@ C *** *** *** *** *** *** ***
      &          H,DD1,DD2,DD3,FCN,NFCN,Y0,Y,IJOB,X,M1,M2,NM1,
      &          E1,LDE1,Z1,Z2,Z3,CONT,F1,F2,IP1,IPHES,SCAL,ERR,
      &          FIRST,REJECT,FAC1,RPAR,IPAR,
-     &          new_nLinSolveErr, bPrint, bAlwaysUse2ndErrorEstimate)
+     &          new_nLinSolveErr, bPrint, bAlwaysUse2ndErrorEstimate,
+     &          ERR1, ERR2)
 
       nLinSolveErr = nLinSolveErr + new_nLinSolveErr
 C --- COMPUTATION OF HNEW
@@ -1147,7 +1150,7 @@ C *** *** *** *** *** *** ***
 C --- STEP IS ACCEPTED 
          FIRST=.FALSE.
          NACCPT=NACCPT+1
-         if (bReport) CALL REPORTFUN(X,H,0,NEWT,NBAD) ! step accepted
+         if (bReport) CALL REPORTFUN(X,H,0,NEWT,NBAD,ERR1,ERR2) ! step accepted
          IF (PRED) THEN
 C       --- PREDICTIVE CONTROLLER OF GUSTAFSSON
             IF (NACCPT.GT.1) THEN
@@ -1219,7 +1222,7 @@ C       --- PREDICTIVE CONTROLLER OF GUSTAFSSON
          GOTO 10 !update jacobian
       ELSE
 C --- STEP IS REJECTED  
-         if (bReport) CALL REPORTFUN(X,H,1,NEWT,NBAD) ! step rejected
+         if (bReport) CALL REPORTFUN(X,H,1,NEWT,NBAD,ERR1,ERR2) ! step rejected
          REJECT=.TRUE.
          LAST=.FALSE.
          IF (FIRST) THEN
@@ -1239,10 +1242,10 @@ C --- UNEXPECTED STEP-REJECTION
       IF (IER.NE.0) THEN
           IF (bPrint) print*, '  Singular problem'
           NSING=NSING+1
-          if (bReport) CALL REPORTFUN(X,H,4,NEWT,NBAD) ! matrix is singular
+          if (bReport) CALL REPORTFUN(X,H,4,NEWT,NBAD,-1.0,-1.0) ! matrix is singular
           IF (NSING.GE.5) GOTO 176
       ELSE
-          if (bReport) CALL REPORTFUN(X,H,6,NEWT,NBAD) ! Newton failed (bis)
+          if (bReport) CALL REPORTFUN(X,H,6,NEWT,NBAD,-1.0,-1.0) ! Newton failed (bis)
       END IF
       NFAILED=NFAILED+1
       IF (bPrint) print*, '  dt will be reduced'

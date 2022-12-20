@@ -175,17 +175,20 @@ def radau5(tini, tend, y0, fun,
         irtrn[0] = 1 # if <0, Radau5 will exit --> TODO: handle events with that ?
     if bReport:
         nReport=1
-        reports={"t":[],"dt":[],"code":[],'newton_iterations':[], 'bad_iterations':[]}
+        reports={"t":[],"dt":[],"code":[],'newton_iterations':[], 'bad_iterations':[],
+                 "err1":[], "err2":[]}
     else:
         nReport=0
         reports=None
-    def reportfun(t,dt,code,newt,nbad):
+    def reportfun(t,dt,code,newt,nbad,err1,err2):
         # print('Reporting',t[0],dt[0],code[0])
         reports['t'].append(t[0])
         reports['dt'].append(dt[0])
         reports['code'].append(code[0])
         reports['newton_iterations'].append(newt[0])
         reports['bad_iterations'].append(nbad[0])
+        reports['err1'].append(err1[0])
+        reports['err2'].append(err2[0])
 
 
     fcn_type = ct.CFUNCTYPE(None, ct.POINTER(ct.c_int), ct.POINTER(ct.c_double), ct.POINTER(ct.c_double),
@@ -199,7 +202,8 @@ def radau5(tini, tend, y0, fun,
                                ct.POINTER(ct.c_double), ct.POINTER(ct.c_double), ct.POINTER(ct.c_int),
                                ct.POINTER(ct.c_int), ct.POINTER(ct.c_double), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int))
     report_fcn_type = ct.CFUNCTYPE(None, ct.POINTER(ct.c_double), ct.POINTER(ct.c_double),
-                                   ct.POINTER(ct.c_int), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int))
+                                   ct.POINTER(ct.c_int), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int),
+                                   ct.POINTER(ct.c_double), ct.POINTER(ct.c_double))
 
     c_radau5 = c_integration.radau5_integration
     c_radau5.argtypes = [ct.c_double, ct.c_double, ct.c_double,
