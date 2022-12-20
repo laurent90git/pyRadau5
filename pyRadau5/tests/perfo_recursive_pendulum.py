@@ -32,7 +32,7 @@ from scipyDAE.radauDAE import RadauDAE
 # from radauDAE_subjac import RadauDAE
 
 ###### Parameters to play with
-n = 500
+n = 50
 initial_angle = np.pi/4
 chosen_index = 3 # The index of the DAE formulation
 rtol=1e-3; atol=rtol # relative and absolute tolerances for time adaptation
@@ -78,7 +78,7 @@ scale_error = True
 factor_on_non_convergence = 0.5
 bDebug=False
 
-if 1:
+if 0:
     #%% Solve the DAE
     t_start = pytime.time()
     solfort = integration.radau5(tini=0., tend=tf, y0=Xini,

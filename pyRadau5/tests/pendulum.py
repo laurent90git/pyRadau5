@@ -1,149 +1,7 @@
 from pyRadau5 import integration
 import numpy as np
 import matplotlib.pyplot as plt
-
-def computeAngle(x,y):
-  theta = np.arctan(-x/y)
-  I = np.where(y>0)[0]
-  theta[I] += np.sign(x[I])*np.pi
-  return theta
-
-#%% Setup the model based on the chosen formulation
-def generateSystem(chosen_index, theta_0=np.pi/2, theta_dot0=0., r0=1., m=1, g=9.81):
-    """ Generates the DAE function representing the pendulum with the desired
-    index (0 to 3).
-        Inputs:
-          chosen_index: int
-            index of the DAE formulation
-          theta_0: float
-            initial angle of the pendulum in radians
-          theta_dot0: float
-            initial angular velocity of the pendulum (rad/s)
-          r0: float
-            length of the rod
-          m: float
-            mass of the pendulum
-          g: float
-            gravitational acceleration (m/s^2)
-        Outputs:
-          dae_fun: callable
-            function of (t,x) that represents the system. Will be given to the
-            solver.
-          jac_dae: callable
-            jacobian of dae_fun with respect to x. May be given to the solver.
-          mass: array_like
-            mass matrix
-          Xini: initial condition for the system
-    """
-
-    if chosen_index==3:
-        def dae_fun(t,X):
-          # X= (x,y,xdot=vx, ydot=vy, lbda)
-          x=X[0]; y=X[1]; vx=X[2]; vy=X[3]; lbda=X[4]
-          return np.array([vx,
-                           vy,
-                           -x*lbda/m,
-                           -g-(y*lbda)/m,
-                            x**2 + y**2 -r0**2])
-        mass = np.eye(5) # mass matrix M
-        mass[-1,-1]=0
-        var_index = np.array([0,0,0,0,3])
-
-        def jac_dae(t,X):
-          x=X[0]; y=X[1]; vx=X[2]; vy=X[3]; lbda=X[4]
-          return np.array([[0.,0.,1.,0.,0.],
-                           [0.,0.,0.,1.,0.],
-                           [-lbda/m, 0., 0., 0., -x/m],
-                           [0.,-lbda/m,  0., 0., -y/m],
-                           [2*x, 2*y, 0., 0., 0.]])
-
-    elif chosen_index==2:
-        def dae_fun(t,X):
-          x=X[0]; y=X[1]; vx=X[2]; vy=X[3]; lbda=X[4]
-          return np.array([vx,
-                           vy,
-                           -x*lbda/m,
-                           -g-(y*lbda)/m,
-                            x*vx+y*vy,])
-        mass = np.eye(5)
-        mass[-1,-1]=0
-        var_index = np.array([0,0,0,0,2])
-
-        def jac_dae(t,X):
-          x=X[0]; y=X[1]; vx=X[2]; vy=X[3]; lbda=X[4]
-          return np.array([[0.,0.,1.,0.,0.],
-                           [0.,0.,0.,1.,0.],
-                           [-lbda/m, 0., 0., 0., -x/m],
-                           [0.,-lbda/m,  0., 0., -y/m],
-                           [vx, vy, x, y, 0.]])
-
-    elif chosen_index==1:
-        def dae_fun(t,X):
-          x=X[0]; y=X[1]; vx=X[2]; vy=X[3]; lbda=X[4]
-          return np.array([vx,
-                           vy,
-                           -x*lbda/m,
-                           -g-(y*lbda)/m,
-                           lbda*(x**2+y**2)/m + g*y - (vx**2 + vy**2)])
-        mass = np.eye(5)
-        mass[-1,-1]=0
-        var_index = np.array([0,0,0,0,1])
-        def jac_dae(t,X):
-          x=X[0]; y=X[1]; vx=X[2]; vy=X[3]; lbda=X[4]
-          return np.array([[0.,0.,1.,0.,0.],
-                           [0.,0.,0.,1.,0.],
-                           [-lbda/m, 0., 0., 0., -x/m],
-                           [0.,-lbda/m,  0., 0., -y/m],
-                           [2*x*lbda/m, 2*y*lbda/m + g, -2*vx, -2*vy, (x**2+y**2)/m]])
-
-    elif chosen_index==0:
-        def dae_fun(t,X):
-          x=X[0]; y=X[1]; vx=X[2]; vy=X[3]; lbda=X[4]
-          dvx = -lbda*x/m
-          dvy = -lbda*y/m - g
-          rsq = x**2 + y**2 # = r(t)^2
-          dt_lbda = (1/m)*(  -g*vy/rsq + 2*(vx*dvx+vy*dvy)/rsq  + (vx**2+vy**2-g*y)*(2*x*vx+2*y*vy)/(rsq**2))
-          return np.array([vx,
-                           vy,
-                           dvx,
-                           dvy,
-                           dt_lbda])
-        mass=None # or np.eye(5) the identity matrix
-        var_index = np.array([0,0,0,0,0])
-        jac_dae = None # use the finite-difference routine, this expression would
-                       # otherwise be quite heavy :)
-    else:
-      raise Exception('index must be in [0,3]')
-
-    # alternatively, define the Jacobian via finite-differences, via complex-step
-    # to ensure machine accuracy
-    if jac_dae is None:
-        import scipy.optimize._numdiff
-        jac_dae = lambda t,x: scipy.optimize._numdiff.approx_derivative(
-                                    fun=lambda x: dae_fun(t,x),
-                                    x0=x, method='cs',
-                                    rel_step=1e-50, f0=None,
-                                    bounds=(-np.inf, np.inf), sparsity=None,
-                                    as_linear_operator=False, args=(),
-                                    kwargs={})
-    ## Otherwise, the Radau solver uses its own routine to estimate the Jacobian, however the
-    # original Scip routine is only adapted to ODEs and may fail at correctly
-    # determining the Jacobian because of it would chosse finite-difference step
-    # sizes too small with respect to the problem variables (<1e-16 in relative).
-    # jac_dae = None
-
-    ## Initial condition (pendulum at an angle)
-    x0 =  r0*np.sin(theta_0)
-    y0 = -r0*np.cos(theta_0)
-    vx0 = r0*theta_dot0*np.cos(theta_0)
-    vy0 = r0*theta_dot0*np.sin(theta_0)
-    lbda_0 = (m*r0*theta_dot0**2 +  m*g*np.cos(theta_0))/r0 # equilibrium along the rod's axis
-
-     # the initial condition should be consistent with the algebraic equations
-    Xini = np.array([x0,y0,vx0,vy0,lbda_0])
-
-    return dae_fun, jac_dae, mass, Xini, var_index
-
+from scipyDAE.tests.pendulum import generateSystem, computeAngle
 
 if __name__=='__main__':
     # Test the pendulum
@@ -206,7 +64,7 @@ if __name__=='__main__':
     # recover the time history of each variable
     x,y,vx,vy,lbda = sol.y
     T = lbda * np.sqrt(x**2+y**2)
-    theta= np.arctan(x/y)
+    theta = computeAngle(x,y)
     dicfort = {'t':sol.t,
                'x':x,
                'y':y,
@@ -292,7 +150,7 @@ if __name__=='__main__':
 
     x,y,vx,vy,lbda = sol.y
     T = lbda * np.sqrt(x**2+y**2)
-    theta= np.arctan(x/y)
+    theta = computeAngle(x,y)
     dicpy   = {'t':sol.t,
                'x':x,
                'y':y,
