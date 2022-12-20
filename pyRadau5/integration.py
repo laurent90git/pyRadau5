@@ -74,10 +74,14 @@ def radau5(tini, tend, y0, fun,
     ysol=[]
 
     def fcn(n, t, y, ydot, rpar, ipar):
-        y_np = np.ctypeslib.as_array(y, shape=(n[0],)) # transform input into a Numpy array
-        ydot_np = fun(t[0], y_np) # call Python time derivative function #TODO: optional arguments *args
-        for i in range(n[0]): # transform back from Numpy #TODO: faster way ?
-          ydot[i] = ydot_np[i]
+        y_np    = np.ctypeslib.as_array(y,    shape=(n[0],)) # transform input into a Numpy array
+        ydot_np = np.ctypeslib.as_array(ydot, shape=(n[0],))
+        ydot_np[:] = fun(t[0], y_np) # call Python time derivative function #TODO: optional arguments *args
+        # # for i in range(n[0]): # transform back from Numpy #TODO: faster way ?
+        #   # ydot[i] = ydot_np[i]
+        # ydot[:]  = fun(t[0], y_np) # call Python time derivative function #TODO: optional arguments *args
+        # ydot[:] = ydot_np[:]
+
 
     if mass_matrix is None:
       # no mass matrix supplied --> set to identity
@@ -223,10 +227,7 @@ def radau5(tini, tend, y0, fun,
 
     jac = None # jacobian function
     ijac = 0
-    mujac=neq
-    mljac=neq
     bDenseJacobian = (mujac == neq) and (mljac == neq) # Jacobian is dense ?
-
 
 
     ### FILL IN PARAMETERS IWORK
