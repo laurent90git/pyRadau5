@@ -166,7 +166,7 @@ plt.xlabel('t (s)')
 plt.ylabel('error')
 plt.title('Radau5 error estimates')
 
-print('TODO: comapre estimate of the Python version on this same problem')
+print('TODO: compare estimate of the Python version on this same problem')
 
 
 #%% Solve the DAE with Scipy's modified Radau
@@ -201,7 +201,7 @@ print("\nScipy DAE of index {} {}".format(chosen_index, state))
 print("{} time steps ({} = {} accepted + {} rejected + {} failed)".format(
   sol.t.size-1, sol.solver.nstep, sol.solver.naccpt, sol.solver.nrejct, sol.solver.nfailed))
 print("{} fev, {} jev, {} LUdec, {} linsolves, {} linsolves for error estimation".format(
-      sol.nfev, sol.njev, sol.nlu, sol.solver.nlusove, sol.solver.nlusolve_errorest))
+      sol.nfev, sol.njev, sol.nlu, sol.solver.nlusolve, sol.solver.nlusolve_errorest))
 print('CPU time = {} s'.format(t_end-t_start))
 
 x,y,vx,vy,lbda = sol.y

@@ -5,12 +5,15 @@ import ctypes as ct
 import scipy.sparse
 
 # TODO: improve the DLL loading process
-import os
-current_dir = os.path.dirname(os.path.realpath(__file__))
-subpath = "fortran/lib_radau_rock.so"
-sPath = os.path.join(current_dir, subpath)
-c_integration = ct.CDLL(sPath)
-
+try:
+  import os
+  current_dir = os.path.dirname(os.path.realpath(__file__))
+  subpath = "fortran/lib_radau_rock.so"
+  sPath = os.path.join(current_dir, subpath)
+  c_integration = ct.CDLL(sPath)
+except Exception as e:
+  print('WARNING: exception while loading Radau5:\n\t{}'.format(e))
+  
 # try:
 #   from scipy.linalg import bandwith
 # except ImportError:

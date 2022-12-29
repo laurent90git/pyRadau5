@@ -13,7 +13,6 @@ from numpy.testing import (assert_, assert_allclose, assert_equal, assert_no_war
 import matplotlib.pyplot as plt
 import numpy as np
 from scipyDAE.tests.recursive_pendulum import generateSystem
-from pyRadau5 import integration
 import time as pytime
 
 def computeAngle(x,y):
@@ -80,6 +79,8 @@ bDebug=False
 
 if 0:
     #%% Solve the DAE
+    from pyRadau5 import integration
+
     t_start = pytime.time()
     solfort = integration.radau5(tini=0., tend=tf, y0=Xini,
                         fun=dae_fun,
@@ -201,7 +202,7 @@ else:
     print("{} time steps ({} = {} accepted + {} rejected + {} failed)".format(
       sol.t.size-1, sol.solver.nstep, sol.solver.naccpt, sol.solver.nrejct, sol.solver.nfailed))
     print("{} fev, {} jev, {} LUdec, {} linsolves, {} linsolves for error estimation".format(
-          sol.nfev, sol.njev, sol.nlu, sol.solver.nlusove, sol.solver.nlusolve_errorest))
+          sol.nfev, sol.njev, sol.nlu, sol.solver.nlusolve, sol.solver.nlusolve_errorest))
     print('CPU time = {} s'.format(t_end-t_start))
 
     x,y,vx,vy,lbda = sol.y
