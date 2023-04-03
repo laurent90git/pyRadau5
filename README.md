@@ -1,9 +1,9 @@
 # pyRadau5
 
 This package provides a Python interface to the well known stiff ODE/DAE Fortran integrator Radau5 developped by Hairer & Wanner [1,2,3].
-The original Fortran code has been modified to improve its robustness on DAE problems (TODO: list of change somwhere). It is also possible to have a precise log output from the solver to investigate its behaviour.
+The original Fortran code has been modified to improve its robustness on DAE problems (TODO: list of change somewhere). It is also possible to have a precise log output from the solver to investigate its behaviour.
 
-This package has been developed by Laurent Series & Laurent François.
+This package has been developed by Laurent François, starting from an early interface developed by Laurent Series.
 
 ## Requirements
 * GFortran compiler. I currently have not taken time to use other compilers.
